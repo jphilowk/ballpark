@@ -1,4 +1,4 @@
-const ASSETS={"skyClouds":"./assets/skyClouds.png","skyMask":"./assets/skyMask.png","skyBirds":"./assets/skyBirds.png","crowdCheer":"./assets/crowdCheer.png","batterIdle":"./assets/batterIdle.png","runnerIdle":"./assets/runnerIdle.png","runnerCelebrate":"./assets/runnerCelebrate.png","batterWalk":"./assets/batterWalk.png","playerWalk":"./assets/playerWalk.png","runnerFront":"./assets/runnerFront.png","runnerBack":"./assets/runnerBack.png","stadium": "./assets/stadiumAmbient.png", "batterReady": "./assets/batterReady.png", "batterSwing": "./assets/batterSwing.png", "batterFollow": "./assets/batterFollow.png", "batterCelebrate": "./assets/batterCelebrate.png", "pitcherReady": "./assets/pitcherReady.png", "pitcherThrow": "./assets/pitcherThrow.png", "fielder": "./assets/fielder.png", "runner": "./assets/runner.png"};
+const ASSETS={"skyClouds":"./assets/skyClouds.png","skyMask":"./assets/skyMask.png","skyBirds":"./assets/skyBirds.png","crowdCheer":"./assets/crowdCheer.png","batterIdle":"./assets/batterIdle.png","batterSwingClip":"./assets/batterSwingClip.png","runnerIdle":"./assets/runnerIdle.png","runnerCelebrate":"./assets/runnerCelebrate.png","batterWalk":"./assets/batterWalk.png","playerWalk":"./assets/playerWalk.png","runnerFront":"./assets/runnerFront.png","runnerBack":"./assets/runnerBack.png","stadium": "./assets/stadiumAmbient.png", "batterReady": "./assets/batterReady.png", "batterSwing": "./assets/batterSwing.png", "batterFollow": "./assets/batterFollow.png", "batterCelebrate": "./assets/batterCelebrate.png", "pitcherReady": "./assets/pitcherReady.png", "pitcherThrow": "./assets/pitcherThrow.png", "fielder": "./assets/fielder.png", "runner": "./assets/runner.png"};
 function points(guess,answer){if(guess===null||!Number.isFinite(guess)||guess<0)return 0;if(guess===answer)return 1000;return Math.min(999,Math.round(1000*Math.exp(-4*Math.abs(guess-answer)/answer)));}
 function result(score){return score===1000?'Home run':score>=800?'Triple':score>=600?'Double':score>=400?'Single':score>0?'Out':'Strikeout';}
 function advance(bases,outs,score){const label=result(score);const steps=label==='Home run'?4:label==='Triple'?3:label==='Double'?2:label==='Single'?1:0;let runs=0;let next=[false,false,false];if(!steps){outs++;return {bases:outs===3?next:[...bases],outs:outs===3?0:outs,runs:0,cleared:outs===3};}for(let i=0;i<3;i++)if(bases[i]){if(i+steps>=3)runs++;else next[i+steps]=true;}if(steps===4)runs++;else next[steps-1]=true;return {bases:next,outs,runs,cleared:false};}
@@ -114,7 +114,7 @@ function player(name,x,y,h){const im=art[name];if(!im)return;const ref=name.star
 // Every pose comes from a Higgsfield clip; canvas only selects and places frames.
 const CLIPS={
  runnerFront:{ms:80},runnerBack:{ms:80},
- batterIdle:{ms:110},runnerIdle:{ms:110},
+ batterIdle:{ms:110},batterSwingClip:{ms:40,once:true},runnerIdle:{ms:110},
  runnerCelebrate:{ms:45,once:true},batterWalk:{ms:45},playerWalk:{ms:45}
 };
 function atlasPlayer(name,x,y,height,time=0,mirror=false,offset=0){
@@ -126,11 +126,11 @@ function atlasPlayer(name,x,y,height,time=0,mirror=false,offset=0){
  c.drawImage(im,(frame%4)*384,Math.floor(frame/4)*384,384,384,-192*scale,-374*scale,384*scale,384*scale);
  c.restore();
 }
-function runnerHeight(y){return 43+Math.max(0,Math.min(1,(y-310)/197))*48;}
+function runnerHeight(y){return 43+Math.max(0,Math.min(1,(y-310)/197))*82;}
 function runningPlayer(r,time){
  const height=runnerHeight(r.y);
  if(r.mode==='celebrate'){atlasPlayer('runnerCelebrate',r.x,r.y,height,r.clipTime);return;}
- if(r.mode==='walk'){atlasPlayer(r.clip||'playerWalk',r.x,r.y,r.clip==='batterWalk'?91:height,r.clipTime,r.dx<0);return;}
+ if(r.mode==='walk'){atlasPlayer(r.clip||'playerWalk',r.x,r.y,r.clip==='batterWalk'?125:height,r.clipTime,r.dx<0);return;}
  if(!r.moving){atlasPlayer('runnerIdle',r.x,r.y,height,time,false,(r.id||0)*3);return;}
  const toward=(r.dy||0)>0,side=r.dx||1;
  atlasPlayer(toward?'runnerFront':'runnerBack',r.x,r.y,height,time,(toward&&side>0)||(!toward&&side<0),(r.id||0)*4);
@@ -217,7 +217,7 @@ function draw(ball=null,pose=0,movers=null,options={}){c.clearRect(0,0,960,540);
 player('fielder',252,320,38);player('fielder',707,321,38);player('fielder',480,280,32);player('pitcher'+(pose===1?'Throw':'Ready'),480,381,69);
 const runners=movers||state.bases.flatMap((on,i)=>on?[{x:basePoints[i+1][0],y:basePoints[i+1][1]-8}]:[]);
 for(const r of [...runners,...(options.actors||[])].sort((a,b)=>a.y-b.y)){c.fillStyle='#14352455';c.beginPath();c.ellipse(r.x,r.y+1,9,3,0,0,Math.PI*2);c.fill();runningPlayer(r,options.time??performance.now());}
-if(!options.hideBatter&&['question','scoring','submit-error','animating'].includes(state.phase)){if(pose<2)atlasPlayer('batterIdle',422,507,125,options.time??performance.now());else player(['batterReady','batterReady','batterSwing','batterFollow','batterCelebrate'][pose]||'batterReady',422,507,125);}
+if(!options.hideBatter&&['question','scoring','submit-error','animating'].includes(state.phase)){if(pose<1)atlasPlayer('batterIdle',422,507,125,options.time??performance.now());else atlasPlayer('batterSwingClip',422,507,125,Math.max(0,(options.time??0)-300));}
 
 if(ball){c.fillStyle='#fff9dc';c.beginPath();c.arc(ball.x,ball.y,ball.size||3,0,Math.PI*2);c.fill();c.fillStyle='#ae4434';c.fillRect(Math.round(ball.x),Math.round(ball.y-1),1,2);}}
 // Sample rounded corners once, then traverse by actual distance at a shared speed.
