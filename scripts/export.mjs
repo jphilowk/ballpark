@@ -1,0 +1,3 @@
+import {readFile,writeFile} from 'node:fs/promises';
+let html=await readFile('index.html','utf8');const css=await readFile('src/ballpark.css','utf8');let js=await readFile('src/ballpark.js','utf8');for(const name of [...js.matchAll(/\.\/assets\/([A-Za-z]+)\.png/g)].map(m=>m[1]))js=js.replace('./assets/'+name+'.png','data:image/png;base64,'+(await readFile('assets/'+name+'.png')).toString('base64'));
+html=html.replace('<link rel="stylesheet" href="./src/ballpark.css">',()=>'<style>'+css+'</style>').replace('<script type="module" src="./src/ballpark.js"></script>',()=>'<script type="module">'+js+'</script>');await writeFile('Ballpark-Prototype-3.html',html);
