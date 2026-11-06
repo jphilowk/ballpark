@@ -1,0 +1,17 @@
+{
+  "name": "ballpark",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "node scripts/export.mjs",
+    "dev": "node server.mjs",
+    "test": "node --test test.mjs animation.test.mjs daily.test.mjs",
+    "build:site": "node scripts/build-site.mjs",
+    "content:review": "node scripts/content.mjs review",
+    "content:check": "node scripts/content.mjs check"
+  },
+  "engines": {
+    "node": "22.x"
+  }
+}

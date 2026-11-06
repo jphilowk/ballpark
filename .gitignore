@@ -1,0 +1,16 @@
+node_modules/
+.vercel/
+public/
+private/
+.env
+.env.*
+!.env.example
+.DS_Store
+.ballpark-browser-check.html
+# Standalone and historical exports stay local; the hosted build uses modular source.
+Ballpark*.html
+HANDOFF.md
+font.b64
+PixelifySans.ttf
+assets/*-animation.json
+assets/player-animations.json
