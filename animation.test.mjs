@@ -105,3 +105,25 @@ test('outs and strikeouts never trigger or restart crowd reactions',()=>{
  beginCrowdReaction(0,2000);beginCrowdReaction(399,2000);
  assert.equal(JSON.stringify(crowdScene(2000)),before);
 });
+
+const lightingContext=vm.createContext({});
+vm.runInContext(source.slice(source.indexOf('const SCENERY='),source.indexOf('const SKY_CLOUDS='))+';globalThis.lighting={solarPosition,lightingAt};',lightingContext);
+const {solarPosition,lightingAt}=lightingContext.lighting;
+test('Chicago skyline follows seasonal daylight without a running client',()=>{
+ const summerEvening=Date.parse('2026-06-21T00:00:00Z'); // 7 PM Chicago
+ const winterEvening=Date.parse('2026-12-22T01:00:00Z'); // 7 PM Chicago
+ assert.ok(solarPosition(summerEvening).elevation>10);
+ assert.ok(solarPosition(winterEvening).elevation<-12);
+ assert.equal(lightingAt(summerEvening).skyAlpha,0);
+ assert.ok(lightingAt(winterEvening).skyAlpha>.8);
+ assert.ok(lightingAt(winterEvening).stars>.9);
+ const winterNoon=lightingAt(Date.parse('2026-12-21T18:00:00Z'));
+ assert.equal(winterNoon.skyAlpha,0);
+});
+test('Chicago dusk blends between daylight and night',()=>{
+ const day=lightingAt(Date.parse('2026-11-06T18:00:00Z'));
+ const dusk=lightingAt(Date.parse('2026-11-06T22:00:00Z'));
+ const night=lightingAt(Date.parse('2026-11-07T01:00:00Z'));
+ assert.ok(day.skyAlpha<dusk.skyAlpha&&dusk.skyAlpha<night.skyAlpha);
+ assert.equal(Object.hasOwn(dusk,'fieldAlpha'),false);
+});

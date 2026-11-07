@@ -108,7 +108,7 @@ const skyContext=skyCanvas.getContext('2d');skyContext.imageSmoothingEnabled=fal
 const ambientEpoch=performance.now();
 const art={};let artReady=false,animationPose=0;
 const artEntries=Object.entries(ASSETS);
-Promise.all([document.fonts.load('700 24px BallparkPixel'),...artEntries.map(([name,url])=>new Promise(resolve=>{const im=new Image();im.onload=()=>{art[name]=im;resolve();};im.onerror=()=>resolve();im.src=url;}))]).then(()=>{artReady=Object.keys(art).length===artEntries.length;draw();refreshStartButton();});
+Promise.all([document.fonts.load('700 24px BallparkPixel'),...artEntries.map(([name,url])=>new Promise(resolve=>{const im=new Image();im.onload=()=>{art[name]=im;resolve();};im.onerror=()=>resolve();im.src=url;}))]).then(()=>{if(art.skyMask)buildSkyTintMask();artReady=Object.keys(art).length===artEntries.length;draw();refreshStartButton();});
 const basePoints=[[480,488],[772,383],[480,315],[185,383],[480,488]];
 function player(name,x,y,h){const im=art[name];if(!im)return;const ref=name.startsWith('batter')?art.batterReady:name.startsWith('pitcher')?art.pitcherReady:im;const ratio=h/ref.naturalHeight;const w=im.naturalWidth*ratio,actualH=im.naturalHeight*ratio;c.drawImage(im,Math.round(x-w/2),Math.round(y-actualH),Math.round(w),Math.round(actualH));}
 // Every pose comes from a Higgsfield clip; canvas only selects and places frames.
@@ -138,6 +138,53 @@ function runningPlayer(r,time){
 function reducedMotion(){return matchMedia('(prefers-reduced-motion: reduce)').matches;}
 // Original Higgsfield clouds are separate layers; new birds and crowd use generated frames.
 const SCENERY={birdDelay:6000,birdInterval:42000,birdDuration:12000};
+// Chicago solar position follows NOAA's fractional-year approximation. UTC input
+// makes sunrise, sunset, and daylight-saving changes independent of device zone.
+// https://gml.noaa.gov/grad/solcalc/solareqns.PDF
+function solarPosition(timestamp){
+ const date=new Date(timestamp),year=date.getUTCFullYear();
+ const day=Math.floor((Date.UTC(year,date.getUTCMonth(),date.getUTCDate())-Date.UTC(year,0,0))/86400000);
+ const days=(year%4===0&&(year%100!==0||year%400===0))?366:365;
+ const minutes=date.getUTCHours()*60+date.getUTCMinutes()+date.getUTCSeconds()/60;
+ const gamma=2*Math.PI/days*(day-1+(minutes/60-12)/24);
+ const equation=229.18*(.000075+.001868*Math.cos(gamma)-.032077*Math.sin(gamma)-.014615*Math.cos(2*gamma)-.040849*Math.sin(2*gamma));
+ const declination=.006918-.399912*Math.cos(gamma)+.070257*Math.sin(gamma)-.006758*Math.cos(2*gamma)+.000907*Math.sin(2*gamma)-.002697*Math.cos(3*gamma)+.00148*Math.sin(3*gamma);
+ const solarMinutes=((minutes+equation-4*87.6298)%1440+1440)%1440;
+ const hourAngle=(solarMinutes/4-180)*Math.PI/180,latitude=41.8781*Math.PI/180;
+ const elevation=Math.asin(Math.sin(latitude)*Math.sin(declination)+Math.cos(latitude)*Math.cos(declination)*Math.cos(hourAngle))*180/Math.PI;
+ return {elevation,morning:hourAngle<0};
+}
+const DAY_LIGHT=[112,177,230,0,0];
+const NIGHT_LIGHT=[8,19,47,.88,1];
+const DAWN_LIGHT=[238,137,115,.54,0];
+const DUSK_LIGHT=[232,106,103,.57,0];
+function blendLight(a,b,t){return a.map((value,i)=>value+(b[i]-value)*t);}
+function lightingAt(timestamp){
+ const {elevation,morning}=solarPosition(timestamp),warm=morning?DAWN_LIGHT:DUSK_LIGHT;
+ const twilight=morning?[55,56,92,.77,.25]:[57,47,91,.79,.25];
+ const ramp=(low,high)=>Math.max(0,Math.min(1,(elevation-low)/(high-low)));
+ const values=elevation<-12?NIGHT_LIGHT:elevation<-4?blendLight(NIGHT_LIGHT,twilight,ramp(-12,-4)):elevation<2?blendLight(twilight,warm,ramp(-4,2)):elevation<12?blendLight(warm,DAY_LIGHT,ramp(2,12)):DAY_LIGHT;
+ return {sky:`rgb(${values.slice(0,3).map(Math.round).join(',')})`,skyAlpha:values[3],stars:values[4]};
+}
+let lightingMinute=-1,lighting=lightingAt(Date.now());
+function currentLighting(){const minute=Math.floor(Date.now()/60000);if(minute!==lightingMinute){lightingMinute=minute;lighting=lightingAt(Date.now());}return lighting;}
+const STARS=[[36,22],[83,49],[134,17],[180,68],[231,32],[286,54],[334,24],[390,72],[439,38],[557,31],[605,60],[718,26],[768,71],[813,35],[902,53],[947,22]];
+let skyTintMask=null;
+function buildSkyTintMask(){
+ skyTintMask=document.createElement('canvas');skyTintMask.width=960;skyTintMask.height=540;
+ const ctx=skyTintMask.getContext('2d');ctx.drawImage(art.skyMask,0,0,960,540);
+ const width=960,height=540,size=width*height;
+ const source=ctx.getImageData(0,0,width,height),filled=ctx.createImageData(width,height);
+ const ground=new Uint8Array(size),queue=new Int32Array(size);let head=0,tail=0;
+ const transparent=i=>source.data[i*4+3]<128;
+ const visit=i=>{if(i>=0&&i<size&&!ground[i]&&transparent(i)){ground[i]=1;queue[tail++]=i;}};
+ // The stadium is one transparent region connected to the bottom of the
+ // original sky mask. Fill only separate cloud holes; never tint that region.
+ for(let x=0;x<width;x++)visit((height-1)*width+x);
+ while(head<tail){const i=queue[head++],x=i%width; if(x>0)visit(i-1);if(x<width-1)visit(i+1);visit(i-width);visit(i+width);}
+ for(let i=0;i<size;i++)if(!ground[i]){const p=i*4;filled.data[p]=filled.data[p+1]=filled.data[p+2]=filled.data[p+3]=255;}
+ ctx.putImageData(filled,0,0);
+}
 const SKY_CLOUDS=[
  {sx:864,sy:0,w:162,h:40,x:-95,y:33.75,speed:2.5},
  {sx:288,sy:0,w:257,h:62,x:187.857,y:10.053,speed:2.9},
@@ -160,7 +207,7 @@ function skyScene(elapsed,reduced=false){
 }
 function drawSky(now){
  if(!art.skyClouds||!art.skyMask)return;
- const scene=skyScene(now-ambientEpoch,reducedMotion()),ctx=skyContext;
+ const scene=skyScene(now-ambientEpoch,reducedMotion()),ctx=skyContext,light=currentLighting();
  ctx.clearRect(0,0,960,540);
  for(const cloud of scene.clouds)ctx.drawImage(art.skyClouds,cloud.sx,cloud.sy,cloud.w,cloud.h,cloud.x,cloud.y,cloud.width,cloud.height);
  if(scene.bird&&art.skyBirds){
@@ -169,6 +216,13 @@ function drawSky(now){
  }
  ctx.globalCompositeOperation='destination-in';ctx.drawImage(art.skyMask,0,0,960,540);ctx.globalCompositeOperation='source-over';
  c.drawImage(skyCanvas,0,0);
+ if(light.skyAlpha||light.stars){
+  ctx.clearRect(0,0,960,540);
+  if(light.skyAlpha){ctx.fillStyle=light.sky;ctx.globalAlpha=light.skyAlpha;ctx.fillRect(0,0,960,220);ctx.globalAlpha=1;}
+  if(light.stars){ctx.fillStyle='#fff5d5';ctx.globalAlpha=light.stars*.9;for(const [x,y] of STARS)ctx.fillRect(x,y,2,2);ctx.globalAlpha=1;}
+  ctx.globalCompositeOperation='destination-in';ctx.drawImage(skyTintMask,0,0);ctx.globalCompositeOperation='source-over';
+  c.drawImage(skyCanvas,0,0);
+ }
 }
 const CROWD_PROFILES=[null,
  {duration:1800,fraction:.22,ms:125},
