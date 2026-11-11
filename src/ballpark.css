@@ -10,15 +10,15 @@ html,body{margin:0;width:100%;height:100%;overflow:hidden}
 body{background:var(--green);color:var(--cream);font:400 18px/1.4 BallparkPixel,monospace}
 button,input,summary,dialog,h1,h2,p,a,small,strong,span,div{font-family:BallparkPixel,monospace}
 button,input{border-radius:0}
-.shell{position:relative;width:100%;height:100dvh}
+.shell{position:relative;top:var(--viewport-offset,0px);width:100%;height:var(--game-height,100dvh)}
 .game,.visual-side,.field{position:absolute;inset:0}
 .field canvas{width:100%;height:100%;display:block;object-fit:cover;image-rendering:pixelated}
 .field:after{content:"";position:absolute;inset:0;pointer-events:none;background:linear-gradient(to bottom,#071e1720,transparent 45%,transparent 68%,#061b14b8);transition:opacity 140ms ease}
 body[data-phase="animating"] .field:after{opacity:0}
-header{position:absolute;z-index:10;left:24px;right:24px;top:18px;display:flex;justify-content:space-between;pointer-events:none}
+header{position:absolute;z-index:10;left:24px;right:24px;top:calc(18px + env(safe-area-inset-top,0px));display:flex;justify-content:space-between;pointer-events:none}
 .wordmark{font-size:27px;font-weight:700;line-height:1;color:var(--cream);text-decoration:none;text-shadow:2px 2px var(--green);pointer-events:auto}
 .wordmark span{font-size:16px;color:var(--gold);margin-left:5px}
-.icon{pointer-events:auto;font-size:21px;font-weight:700;background:var(--green);color:var(--cream);border:2px solid var(--edge);width:36px;height:36px;cursor:pointer}
+.icon{pointer-events:auto;font-size:21px;font-weight:700;background:var(--green);color:var(--cream);border:2px solid var(--edge);width:44px;height:44px;cursor:pointer}
 .edition,footer,.field-label{display:none}
 .scoreboard{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%);white-space:nowrap}
 .rounds{position:absolute;z-index:5;top:19px;left:50%;transform:translateX(-50%);display:flex;gap:6px}
@@ -66,7 +66,7 @@ input::placeholder{font:400 23px BallparkPixel,monospace;font-variant-numeric:no
 .reveal{text-align:center;max-width:560px}
 .reveal .sport{font-size:20px;margin:0}
 .reveal details{font-size:15px;color:var(--muted)}
-.reveal summary{cursor:pointer;display:inline-block;text-decoration:underline;text-underline-offset:4px;padding:4px 8px}
+.reveal summary{cursor:pointer;display:inline-flex;align-items:center;min-height:44px;text-decoration:underline;text-underline-offset:4px;padding:4px 8px}
 .reveal p{font-size:17px;line-height:1.5;margin:12px 0 8px}
 .reveal a{color:var(--cream)}
 .final{text-align:center;width:min(440px,calc(100% - 40px))}
@@ -76,7 +76,7 @@ input::placeholder{font:400 23px BallparkPixel,monospace;font-variant-numeric:no
 .finish-hits{font-size:17px;color:var(--muted);margin-top:20px}
 #share-status{flex-basis:100%;white-space:pre-wrap;text-align:center;font-size:16px}
 #play-call{position:absolute;top:39%;left:0;right:0;text-align:center;font-size:clamp(35px,5vw,70px);font-weight:700;line-height:1.1;color:var(--gold);text-shadow:4px 4px var(--green);pointer-events:none}
-dialog{background:var(--green);color:var(--cream);border:2px solid var(--edge);box-shadow:0 8px #061b1480;max-width:540px;max-height:calc(100dvh - 48px);width:90vw;padding:28px;font-size:18px;line-height:1.5}
+dialog{background:var(--green);color:var(--cream);border:2px solid var(--edge);box-shadow:0 8px #061b1480;max-width:540px;max-height:calc(100dvh - 48px);width:90vw;padding:28px;font-size:18px;line-height:1.5;overflow:auto}
 dialog::backdrop{background:#061911b8;animation:backdrop-in 140ms ease-out}
 dialog.is-closing::backdrop{animation:backdrop-out 100ms ease-in forwards}
 dialog h2{font-size:26px;padding-right:24px}
@@ -95,18 +95,25 @@ button:focus-visible,a:focus-visible,summary:focus-visible{outline:2px solid var
  .answers{margin:18px 0 12px}.reveal details[open]{max-height:110px;overflow-y:auto}
 }
 @media(max-width:650px){
- header{left:14px;right:14px;top:14px}.wordmark{font-size:24px}
- .rounds{top:65px}.rounds:after{top:31px}.round{width:23px;height:22px}
- .prompt-card{top:42%;width:calc(100% - 30px);padding:22px 24px}
+ header{left:14px;right:14px;top:calc(14px + env(safe-area-inset-top,0px))}.wordmark{font-size:24px}
+ .rounds{top:calc(65px + env(safe-area-inset-top,0px))}.rounds:after{top:31px}.round{width:23px;height:22px}
+ .question-area{display:flex;align-items:center;justify-content:center;padding:calc(115px + env(safe-area-inset-top,0px)) 15px 135px}
+ .prompt-card{position:relative;top:auto;left:auto;transform:none;width:100%;max-height:100%;padding:22px 24px;overflow-y:auto;overscroll-behavior:contain}
  h2{font-size:25px;line-height:1.3}.sport{font-size:13px;letter-spacing:.6px}
- .welcome{width:min(330px,calc(100% - 40px));padding:28px}.welcome h1{font-size:46px}
+ .welcome{width:min(330px,100%);padding:28px}.welcome h1{font-size:46px}
  .welcome-copy{font-size:18px}.welcome .primary{font-size:23px}
- .answer-dock{width:calc(100% - 30px);gap:9px;bottom:8%}
+ .answer-dock{width:calc(100% - 30px);gap:9px;bottom:max(18px,calc(env(safe-area-inset-bottom,0px) + 10px))}
  .timer{width:44px;height:44px;font-size:24px;outline-offset:2px}
  input{font-size:23px;height:56px;padding:11px 12px 14px}input::placeholder{font-size:20px}
  .primary,.secondary{min-height:56px;padding:12px 17px;font-size:20px}
  .error{left:53px;top:66px;font-size:14px}.answers{gap:16px}.answers strong{font-size:32px}
  .answers small{font-size:13px}.reveal .sport{font-size:19px}.final h1{font-size:42px}
- dialog{padding:22px;font-size:17px}
+ .single{gap:8px}.single .primary,.single .secondary{min-width:0;flex:1}
+ dialog{padding:22px;font-size:17px;max-height:calc(100dvh - env(safe-area-inset-top,0px) - env(safe-area-inset-bottom,0px) - 24px)}
 }
+@media(max-width:360px){h2{font-size:23px}.prompt-card{padding:18px 19px}.welcome{padding:24px}.answer-dock input::placeholder{font-size:18px}}
+body.keyboard-open header,body.keyboard-open .rounds{display:none}
+body.keyboard-open .question-area{display:flex;align-items:center;justify-content:center;padding:12px 15px 96px}
+body.keyboard-open .prompt-card{position:relative;top:auto;left:auto;transform:none;width:min(760px,100%);max-height:100%;overflow-y:auto}
+body.keyboard-open .answer-dock{bottom:max(10px,env(safe-area-inset-bottom,0px))}
 @media(prefers-reduced-motion:reduce){*,*::before,*::after{transition:none!important;animation:none!important}}
