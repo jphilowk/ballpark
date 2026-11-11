@@ -12,3 +12,26 @@ test('guesses reveal only this answer and advance the signed round',()=>{const b
 test('tampered, expired and wrong-puzzle tokens fail; started games survive midnight',()=>{const bank=fixture(),game=createSession(bank,env,now);assert.throws(()=>getQuestion(bank,game.token+'x',env,now));assert.throws(()=>getQuestion(bank,game.token,env,now+37*3600000));assert.equal(getQuestion(bank,game.token,env,now+18*3600000).index,0);const wrong=signToken({...readToken(game.token,env,now),puzzleId:'wrong'},env);assert.throws(()=>getQuestion(bank,wrong,env,now));});
 test('private environment packing loads and rejects corruption',()=>{const bank=fixture();assert.deepEqual(loadBank({...env,BALLPARK_BANK_GZIP_BASE64:gzipSync(JSON.stringify(bank)).toString('base64')}),bank);assert.throws(()=>loadBank({BALLPARK_BANK_GZIP_BASE64:'not-a-bank'}));});
 test('finishing five rounds closes the token; exact retry is deterministic',()=>{const bank=fixture(),game=createSession(bank,env,now);let token=game.token;const body={token,guess:5,timed:false};assert.deepEqual(scoreQuestion(bank,body,env,now),scoreQuestion(bank,body,env,now));for(let i=0;i<5;i++)token=scoreQuestion(bank,{token,guess:5,timed:false},env,now).token;assert.throws(()=>getQuestion(bank,token,env,now));});
+
+test('an existing session keeps its scoring curve after a scoring update',()=>{
+ const bank=fixture(),game=createSession(bank,env,now);
+ const question=getPuzzle(bank,game.date).questions[0];
+ const payload=readToken(game.token,env,now);
+ delete payload.scoringVersion;
+ const guess=question.answer*1.25;
+ const oldRound=scoreQuestion(bank,{token:signToken(payload,env),guess},env,now);
+ const newRound=scoreQuestion(bank,{token:game.token,guess},env,now);
+ assert.equal(oldRound.score,368);
+ assert.equal(newRound.score,625);
+ assert.equal(readToken(newRound.token,env,now).scoringVersion,2);
+ assert.equal(readToken(oldRound.token,env,now).scoringVersion,undefined);
+});
+
+test('daily scoring uses the current question’s sport',()=>{
+ const bank=fixture(),game=createSession(bank,env,now);
+ const questions=getPuzzle(bank,game.date).questions;
+ const round=questions.findIndex(question=>question.sport==='MLB');
+ const token=signToken({...readToken(game.token,env,now),round},env);
+ const scored=scoreQuestion(bank,{token,guess:questions[round].answer*1.3},env,now);
+ assert.equal(scored.score,625);
+});

@@ -1,4 +1,4 @@
-export function points(guess,answer){if(guess===null||!Number.isFinite(guess)||guess<0)return 0;if(guess===answer)return 1000;return Math.min(999,Math.round(1000*Math.exp(-4*Math.abs(guess-answer)/answer)));}
+export {points} from './lib/scoring.mjs';
 export function result(score){return score===1000?'Home run':score>=800?'Triple':score>=600?'Double':score>=400?'Single':score>0?'Out':'Strikeout';}
 export function advance(bases,outs,score){const label=result(score);const steps=label==='Home run'?4:label==='Triple'?3:label==='Double'?2:label==='Single'?1:0;let runs=0;let next=[false,false,false];if(!steps){outs++;return {bases:outs===3?next:[...bases],outs:outs===3?0:outs,runs:0,cleared:outs===3};}for(let i=0;i<3;i++)if(bases[i]){if(i+steps>=3)runs++;else next[i+steps]=true;}if(steps===4)runs++;else next[steps-1]=true;return {bases:next,outs,runs,cleared:false};}
 export function chicagoDate(date=new Date()){return new Intl.DateTimeFormat('en-CA',{timeZone:'America/Chicago',year:'numeric',month:'2-digit',day:'2-digit'}).format(date);}

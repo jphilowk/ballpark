@@ -1,5 +1,5 @@
 const ASSETS={"skyClouds":"./assets/skyClouds.png","skyMask":"./assets/skyMask.png","skyBirds":"./assets/skyBirds.png","crowdCheer":"./assets/crowdCheer.png","batterIdle":"./assets/batterIdle.png","batterSwingClip":"./assets/batterSwingClip.png","runnerIdle":"./assets/runnerIdle.png","runnerCelebrate":"./assets/runnerCelebrate.png","batterWalk":"./assets/batterWalk.png","playerWalk":"./assets/playerWalk.png","runnerFront":"./assets/runnerFront.png","runnerBack":"./assets/runnerBack.png","stadium": "./assets/stadiumAmbient.png", "batterReady": "./assets/batterReady.png", "batterSwing": "./assets/batterSwing.png", "batterFollow": "./assets/batterFollow.png", "batterCelebrate": "./assets/batterCelebrate.png", "pitcherReady": "./assets/pitcherReady.png", "pitcherThrow": "./assets/pitcherThrow.png", "fielder": "./assets/fielder.png", "runner": "./assets/runner.png"};
-function points(guess,answer){if(guess===null||!Number.isFinite(guess)||guess<0)return 0;if(guess===answer)return 1000;return Math.min(999,Math.round(1000*Math.exp(-4*Math.abs(guess-answer)/answer)));}
+import {points} from '../lib/scoring.mjs';
 function result(score){return score===1000?'Home run':score>=800?'Triple':score>=600?'Double':score>=400?'Single':score>0?'Out':'Strikeout';}
 function advance(bases,outs,score){const label=result(score);const steps=label==='Home run'?4:label==='Triple'?3:label==='Double'?2:label==='Single'?1:0;let runs=0;let next=[false,false,false];if(!steps){outs++;return {bases:outs===3?next:[...bases],outs:outs===3?0:outs,runs:0,cleared:outs===3};}for(let i=0;i<3;i++)if(bases[i]){if(i+steps>=3)runs++;else next[i+steps]=true;}if(steps===4)runs++;else next[steps-1]=true;return {bases:next,outs,runs,cleared:false};}
 function chicagoDate(date=new Date()){return new Intl.DateTimeFormat('en-CA',{timeZone:'America/Chicago',year:'numeric',month:'2-digit',day:'2-digit'}).format(date);}
@@ -112,7 +112,7 @@ async function submit(timed){
   state.pendingGuess=guess;state.pendingTimed=timed;state.phase='scoring';state.deadline=null;save();$('#guess')?.blur();render();
   try{const response=await apiCall('/api/score',{token:state.token,guess,timed});score=response.score;Object.assign(questions[state.index],{answer:response.answer,fact:response.fact,source:response.source,url:response.url});state.questions[state.index]=questions[state.index];state.token=response.token;}
   catch{state.phase='submit-error';save();render();return;}
- }else score=points(guess,questions[state.index].answer);
+ }else score=points(guess,questions[state.index].answer,questions[state.index].sport);
  const play=advance(state.bases,state.outs,score);
  state.history.push({guess,score,timed,runs:play.runs,cleared:play.cleared});state.bases=play.bases;state.outs=play.outs;state.runs+=play.runs;state.phase='animating';state.pendingGuess=null;save();$('#guess')?.blur();render();animate(score,previousBases,play.cleared);
 }

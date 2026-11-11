@@ -12,6 +12,6 @@ http.createServer(async(req,res)=>{
   const path=decodeURIComponent(new URL(req.url,'http://localhost').pathname);
   if(handlers[path])return await handlers[path](req,res);
   const file=resolve(root,'.'+(path==='/'?'/index.html':path));if(!file.startsWith(root)||path.split('/').some(part=>part.startsWith('.')))throw Error();
-  const body=await readFile(file);res.setHeader('Content-Type',({'.css':'text/css','.js':'text/javascript','.png':'image/png','.html':'text/html','.txt':'text/plain'})[extname(file)]||'application/octet-stream');res.end(body);
+  const body=await readFile(file);res.setHeader('Content-Type',({'.css':'text/css','.js':'text/javascript','.mjs':'text/javascript','.png':'image/png','.html':'text/html','.txt':'text/plain'})[extname(file)]||'application/octet-stream');res.end(body);
  }catch{res.writeHead(404);res.end('Not found');}
 }).listen(Number(process.env.PORT)||3000,'127.0.0.1',()=>console.log('Local: http://localhost:'+(process.env.PORT||3000)));
