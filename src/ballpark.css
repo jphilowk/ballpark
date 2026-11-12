@@ -123,6 +123,32 @@ button:focus-visible,a:focus-visible,summary:focus-visible{outline:2px solid var
  dialog{padding:22px;font-size:17px;max-height:calc(100dvh - env(safe-area-inset-top,0px) - env(safe-area-inset-bottom,0px) - 24px)}
 }
 @media(max-width:360px){h2{font-size:23px}.prompt-card{padding:18px 19px}.welcome{padding:24px}.answer-dock input::placeholder{font-size:18px}}
+@media(max-width:650px) and (orientation:portrait){
+ .rounds{top:calc(59px + env(safe-area-inset-top,0px))}
+ .rounds:after{display:none}
+ .field:after{background:linear-gradient(to bottom,#071e1740,transparent 25%,transparent 78%,#061b14d9)}
+ #play-call{top:19%;font-size:clamp(28px,8vw,44px)}
+ body:not([data-phase="finished"]) .question-area{
+  padding-top:calc(89px + env(safe-area-inset-top,0px));
+  padding-bottom:61dvh;
+ }
+ body[data-phase="reveal"] .question-area,
+ body[data-phase="welcome"] .question-area{padding-bottom:58dvh}
+ .prompt-card{padding:14px 16px}
+ .prompt-card h2{font-size:clamp(19px,5.4vw,25px);line-height:1.25}
+ .prompt-card .sport{margin-bottom:8px}
+ .welcome h1{font-size:clamp(32px,10vw,44px)}
+ .welcome-copy{margin:7px 0 10px;font-size:16px}
+ .welcome .primary{min-height:44px;padding:7px 14px}
+ .reveal .answers{margin:8px 0 3px}
+ .reveal .answers strong{font-size:26px}
+ .reveal summary{min-height:34px}
+ .error{top:auto;bottom:calc(100% + 5px)}
+ body.keyboard-open .field{visibility:hidden}
+}
+@media(max-width:650px) and (max-aspect-ratio:2/5){
+ .field canvas{object-fit:contain}
+}
 body.keyboard-open header,body.keyboard-open .rounds{display:none}
 body.keyboard-open .question-area{display:flex;align-items:center;justify-content:center;padding:12px 15px 96px}
 body.keyboard-open .prompt-card{position:relative;top:auto;left:auto;transform:none;width:min(760px,100%);max-height:100%;overflow-y:auto}

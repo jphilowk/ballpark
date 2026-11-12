@@ -1,5 +1,6 @@
 const ASSETS={"skyClouds":"./assets/skyClouds.png","skyMask":"./assets/skyMask.png","skyBirds":"./assets/skyBirds.png","crowdCheer":"./assets/crowdCheer.png","batterIdle":"./assets/batterIdle.png","batterSwingClip":"./assets/batterSwingClip.png","runnerIdle":"./assets/runnerIdle.png","runnerCelebrate":"./assets/runnerCelebrate.png","batterWalk":"./assets/batterWalk.png","playerWalk":"./assets/playerWalk.png","runnerFront":"./assets/runnerFront.png","runnerBack":"./assets/runnerBack.png","stadium":"./assets/stadiumAmbient.png","pitcherDelivery":"./assets/pitcherDelivery.png","pitcherCheer":"./assets/pitcherCheer.png","pitcherCry":"./assets/pitcherCry.png","pitcherSingle":"./assets/pitcherSingle.png","pitcherDouble":"./assets/pitcherDouble.png","pitcherTriple":"./assets/pitcherTriple.png","defenderIdle":"./assets/defenderIdle.png"};
 import {points} from '../lib/scoring.mjs';
+ASSETS.stadiumPortrait='./assets/stadiumPortrait.png';
 function result(score){return score===1000?'Home run':score>=800?'Triple':score>=600?'Double':score>=400?'Single':score>0?'Out':'Strikeout';}
 function advance(bases,outs,score){const label=result(score);const steps=label==='Home run'?4:label==='Triple'?3:label==='Double'?2:label==='Single'?1:0;let runs=0;let next=[false,false,false];if(!steps){outs++;return {bases:outs===3?next:[...bases],outs:outs===3?0:outs,runs:0,cleared:outs===3};}for(let i=0;i<3;i++)if(bases[i]){if(i+steps>=3)runs++;else next[i+steps]=true;}if(steps===4)runs++;else next[steps-1]=true;return {bases:next,outs,runs,cleared:false};}
 function chicagoDate(date=new Date()){return new Intl.DateTimeFormat('en-CA',{timeZone:'America/Chicago',year:'numeric',month:'2-digit',day:'2-digit'}).format(date);}
@@ -151,6 +152,10 @@ async function submit(timed){
 function tick(){if(state.phase!=='question')return;const left=Math.max(0,state.deadline-Date.now());if(left===0){submit(true);return;}const timer=$('.timer'),track=$('.track');if(timer){timer.textContent=Math.ceil(left/1000);timer.classList.toggle('urgent',left<=5000);track.classList.toggle('urgent',left<=5000);track.firstElementChild.style.width=left/200+'%';}}
 setInterval(tick,100);document.addEventListener('visibilitychange',tick);$('#help').onclick=openHelp;$('#close-help').onclick=closeHelp;$('#rules').oncancel=e=>{e.preventDefault();closeHelp();};
 const canvas=$('#field'),c=canvas.getContext('2d');canvas.width=960;canvas.height=540;c.imageSmoothingEnabled=false;
+const portraitView=matchMedia('(max-width: 650px) and (orientation: portrait)');
+portraitView.addEventListener('change',()=>{
+ if(!['animating','entering'].includes(state.phase))draw();
+});
 const skyCanvas=document.createElement('canvas');skyCanvas.width=960;skyCanvas.height=540;
 const skyContext=skyCanvas.getContext('2d');skyContext.imageSmoothingEnabled=false;
 const ambientEpoch=performance.now();
@@ -178,13 +183,13 @@ function atlasPlayer(name,x,y,height,time=0,mirror=false,offset=0){
  c.restore();
 }
 function runnerHeight(y){return 43+Math.max(0,Math.min(1,(y-310)/197))*82;}
-function runningPlayer(r,time){
+function runningPlayer(r,time,drawPlayer=atlasPlayer){
  const height=runnerHeight(r.y);
- if(r.mode==='celebrate'){atlasPlayer('runnerCelebrate',r.x,r.y,height,r.clipTime);return;}
- if(r.mode==='walk'){atlasPlayer(r.clip||'playerWalk',r.x,r.y,r.clip==='batterWalk'?125:height,r.clipTime,r.dx<0);return;}
- if(!r.moving){atlasPlayer('runnerIdle',r.x,r.y,height,time,false,(r.id||0)*3);return;}
+ if(r.mode==='celebrate'){drawPlayer('runnerCelebrate',r.x,r.y,height,r.clipTime);return;}
+ if(r.mode==='walk'){drawPlayer(r.clip||'playerWalk',r.x,r.y,r.clip==='batterWalk'?125:height,r.clipTime,r.dx<0);return;}
+ if(!r.moving){drawPlayer('runnerIdle',r.x,r.y,height,time,false,(r.id||0)*3);return;}
  const toward=(r.dy||0)>0,side=r.dx||1;
- atlasPlayer(toward?'runnerFront':'runnerBack',r.x,r.y,height,time,(toward&&side>0)||(!toward&&side<0),(r.id||0)*4);
+ drawPlayer(toward?'runnerFront':'runnerBack',r.x,r.y,height,time,(toward&&side>0)||(!toward&&side<0),(r.id||0)*4);
 }
 function reducedMotion(){return matchMedia('(prefers-reduced-motion: reduce)').matches;}
 // Original Higgsfield clouds are separate layers; new birds and crowd use generated frames.
@@ -318,20 +323,73 @@ function drawCrowd(now){
  }
  c.restore();
 }
-function draw(ball=previousPlayBall(),pose=0,movers=null,options={}){c.clearRect(0,0,960,540);if(!art.stadium){c.fillStyle='#244a35';c.fillRect(0,0,960,540);return;}c.drawImage(art.stadium,0,0,960,540);drawSky(performance.now());drawCrowd(performance.now());c.textAlign='center';c.fillStyle='#e5d9a2';c.font='700 10px BallparkPixel';c.fillText('POINTS',480,119);c.fillStyle='#ffcf64';c.font='700 30px ui-monospace, monospace';c.fillText(String(total()).padStart(4,'0'),480,146);c.fillStyle='#a8b68d';c.fillRect(401,153,158,1);c.fillStyle='#fff2c9';c.font='700 12px ui-monospace, monospace';c.fillText('RUNS '+state.runs,434,169);c.fillText('OUTS '+state.outs,525,169);c.font='400 10px BallparkPixel';c.fillStyle='#c6c69e';c.fillText(state.phase==='finished'?'FINAL':'AT BAT '+(state.phase==='welcome'?0:state.index+1)+' / 5',480,184);
-const spriteTime=options.time??performance.now();
-atlasPlayer('defenderIdle',252,320,38,spriteTime);
-atlasPlayer('defenderIdle',707,321,38,spriteTime,false,3);
-atlasPlayer('defenderIdle',480,280,32,spriteTime,false,5);
-const pitching=state.phase==='animating'&&!reducedMotion();
-const pitchTime=pitching?options.time??0:0;
-const reaction=pitching?pitcherReaction(state.history.at(-1)?.score,pitchTime):null;
-atlasPlayer(reaction?.clip??'pitcherDelivery',480,381,69,reaction?.time??pitchTime);
-const runners=movers||state.bases.flatMap((on,i)=>on?[{x:basePoints[i+1][0],y:basePoints[i+1][1]-8}]:[]);
-for(const r of [...runners,...(options.actors||[])].sort((a,b)=>a.y-b.y)){c.fillStyle='#14352455';c.beginPath();c.ellipse(r.x,r.y+1,9,3,0,0,Math.PI*2);c.fill();runningPlayer(r,options.time??performance.now());}
-if(!options.hideBatter&&['question','scoring','submit-error','animating'].includes(state.phase)){if(pose<1)atlasPlayer('batterIdle',422,507,125);else atlasPlayer('batterSwingClip',422,507,125,(options.time??0)-MOTION.swingStart);}
-
-if(ball)drawBaseball(ball);
+// Match the portrait artwork's base anchors while keeping the shared play timeline.
+// Project the anchor only so players retain their original proportions.
+const portraitX=x=>376+(x-480)*.79;
+const portraitY=y=>790+(y-307)*1.37;
+// The delivery sheet's idle cleats sit slightly right of its frame center.
+const PORTRAIT_PITCHER={x:371,y:904,height:100,releaseX:350,releaseY:834};
+function portraitPlayer(name,x,y,height,...frame){
+ atlasPlayer(name,portraitX(x),portraitY(y),height*1.15,...frame);
+}
+function drawScoreboard(portrait){
+ c.save();
+ if(portrait){
+  c.translate(376,495);
+  c.scale(1.12,1.12);
+  c.translate(-480,-109);
+ }
+ c.textAlign='center';c.fillStyle='#e5d9a2';c.font='700 10px BallparkPixel';c.fillText('POINTS',480,119);
+ c.fillStyle='#ffcf64';c.font='700 30px ui-monospace, monospace';c.fillText(String(total()).padStart(4,'0'),480,146);
+ c.fillStyle='#a8b68d';c.fillRect(401,153,158,1);
+ c.fillStyle='#fff2c9';c.font='700 12px ui-monospace, monospace';c.fillText('RUNS '+state.runs,434,169);c.fillText('OUTS '+state.outs,525,169);
+ c.font='400 10px BallparkPixel';c.fillStyle='#c6c69e';c.fillText(state.phase==='finished'?'FINAL':'AT BAT '+(state.phase==='welcome'?0:state.index+1)+' / 5',480,184);
+ c.restore();
+}
+function draw(ball=previousPlayBall(),pose=0,movers=null,options={}){
+ const portrait=portraitView.matches,width=portrait?752:960,height=portrait?1344:540;
+ if(canvas.width!==width||canvas.height!==height){
+  canvas.width=width;canvas.height=height;c.imageSmoothingEnabled=false;
+ }
+ c.clearRect(0,0,width,height);
+ const stadium=portrait?art.stadiumPortrait:art.stadium;
+ if(!stadium){c.fillStyle='#244a35';c.fillRect(0,0,width,height);return;}
+ c.drawImage(stadium,0,0,width,height);
+ const now=performance.now();
+ if(!portrait){drawSky(now);drawCrowd(now);}
+ drawScoreboard(portrait);
+ const drawPlayer=portrait?portraitPlayer:atlasPlayer,spriteTime=options.time??now;
+ drawPlayer('defenderIdle',portrait?205:252,portrait?280:320,portrait?49:38,spriteTime);
+ drawPlayer('defenderIdle',portrait?755:707,portrait?280:321,portrait?49:38,spriteTime,false,3);
+ drawPlayer('defenderIdle',480,portrait?247:280,portrait?41:32,spriteTime,false,5);
+ const pitching=state.phase==='animating'&&!reducedMotion();
+ const pitchTime=pitching?options.time??0:0;
+ const reaction=pitching?pitcherReaction(state.history.at(-1)?.score,pitchTime):null;
+ const pitcher=portrait?PORTRAIT_PITCHER:{x:480,y:381,height:69};
+ atlasPlayer(reaction?.clip??'pitcherDelivery',pitcher.x,pitcher.y,pitcher.height,reaction?.time??pitchTime);
+ const runners=movers||state.bases.flatMap((on,i)=>on?[{x:basePoints[i+1][0],y:basePoints[i+1][1]-8}]:[]);
+ for(const runner of [...runners,...(options.actors||[])].sort((a,b)=>a.y-b.y)){
+  const x=portrait?portraitX(runner.x):runner.x,y=portrait?portraitY(runner.y):runner.y;
+  c.fillStyle='#14352455';c.beginPath();c.ellipse(x,y+1,9,3,0,0,Math.PI*2);c.fill();
+  runningPlayer(runner,spriteTime,drawPlayer);
+ }
+ if(!options.hideBatter&&['question','scoring','submit-error','animating'].includes(state.phase)){
+  if(pose<1)drawPlayer('batterIdle',422,507,125);
+  else drawPlayer('batterSwingClip',422,507,125,(options.time??0)-MOTION.swingStart);
+ }
+ if(ball&&portrait){
+  let x=portraitX(ball.x),y=portraitY(ball.y);
+  const groundY=ball.groundY;
+  if(groundY===undefined){
+   // Match the larger pitcher's release and converge on the existing contact point.
+   const remaining=(MOTION.contact-pitchTime)/(MOTION.contact-MOTION.release);
+   x+=(PORTRAIT_PITCHER.releaseX-portraitX(PITCH_RELEASE.x))*remaining;
+   y+=(PORTRAIT_PITCHER.releaseY-portraitY(PITCH_RELEASE.y))*remaining;
+  }
+  drawBaseball({...ball,x,y,groundY:groundY===undefined?undefined:portraitY(groundY),size:ball.size*1.15});
+ }else if(ball){
+  drawBaseball(ball);
+ }
 }
 function drawBaseball({x,y,size,spin,groundY}){
  if(groundY!==undefined){
@@ -390,12 +448,15 @@ function playDuration(score,previousBases){
  return end;
 }
 const CONTACT_POINT={x:474,y:445};
+const PITCH_RELEASE={x:462,y:335};
 const HIT_LANES=[-1,.5,0,1,-.5];
+// Fair-hit depths leave room for the full 24% roll before either stadium's wall.
+// The widest lanes also fit inside the portrait crop.
 const BALL_PATHS=[
  {spread:105,depth:72,arc:10,flight:250,roll:700},
- {spread:180,depth:120,arc:26,flight:430,roll:1050},
- {spread:240,depth:166,arc:55,flight:620,roll:1050},
- {spread:290,depth:205,arc:78,flight:740,roll:1150},
+ {spread:180,depth:106,arc:26,flight:430,roll:1050},
+ {spread:228,depth:124,arc:52,flight:620,roll:1050},
+ {spread:255,depth:135,arc:70,flight:740,roll:1150},
  {spread:370,depth:315,arc:132,flight:970,roll:0}
 ];
 function ballAfterSwing(score,atBat,elapsed){
@@ -436,7 +497,7 @@ function playScene(score,previousBases,elapsed,cleared=false,atBat=0){
   scene.pose=elapsed<MOTION.swingStart?0:1;
   if(elapsed>=MOTION.release){
    const u=(elapsed-MOTION.release)/(MOTION.contact-MOTION.release);
-   scene.ball={x:462+(CONTACT_POINT.x-462)*u,y:335+(CONTACT_POINT.y-335)*u-9*Math.sin(u*Math.PI),size:2+2*u,spin:u*17};
+   scene.ball={x:PITCH_RELEASE.x+(CONTACT_POINT.x-PITCH_RELEASE.x)*u,y:PITCH_RELEASE.y+(CONTACT_POINT.y-PITCH_RELEASE.y)*u-9*Math.sin(u*Math.PI),size:2+2*u,spin:u*17};
   }
   return scene;
  }

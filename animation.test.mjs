@@ -6,6 +6,22 @@ const source=await readFile('src/ballpark.js','utf8');
 const context=vm.createContext({});
 vm.runInContext(source.slice(source.indexOf('const basePoints='),source.indexOf('const CLIPS='))+source.slice(source.indexOf('const routeCache='),source.indexOf('function animate('))+';globalThis.routes={routePoint,runnerRoute};',context);
 const {routePoint,runnerRoute}=context.routes;
+test('portrait runner endpoints align with the stadium bags and fit iPhone framing',()=>{
+ const ctx=vm.createContext({});
+ vm.runInContext(source.slice(source.indexOf('const portraitX='),source.indexOf('function portraitPlayer'))+';globalThis.project=(x,y)=>[portraitX(x),portraitY(y)];',ctx);
+ const bagCenters=[[605,884],[376,790],[141,884],[376,1028]];
+ for(let steps=1;steps<=4;steps++){
+  const {x,y}=routePoint(0,steps,1,true);
+  const [px,py]=ctx.project(x,y);
+  const [bagX,bagY]=bagCenters[steps-1];
+  assert.ok(Math.hypot(px-bagX,py-bagY)<5);
+  for(const [width,height] of [[440,956],[375,667],[320,568]]){
+   const scale=Math.max(width/752,height/1344);
+   assert.ok(Math.abs((px-376)*scale)<width/2-20);
+   assert.ok(Math.abs((py-672)*scale)<height/2-20);
+  }
+ }
+});
 test('second to third and third to home face toward the camera and touch bases',()=>{
  for(const [start,end,dx] of [[2,[185,375],-1],[3,[480,480],1]]){const mid=routePoint(start,1,.5);assert.ok(mid.dy>0);assert.equal(Math.sign(mid.dx),dx);const finish=routePoint(start,1,1);assert.equal(finish.x,end[0]);assert.equal(finish.y,end[1]);}
 });
@@ -36,6 +52,27 @@ test('ball rolls after landing and remains on the field except on a home run',()
  for(const score of [0,250,500,700,900])assert.ok(scene(score,10000));
  assert.ok(scene(1000,500));
  assert.equal(scene(1000,10000),null);
+});
+
+test('singles, doubles and triples stay on the field in every hit lane',()=>{
+ const bases=[false,false,false];
+ for(let atBat=0;atBat<5;atBat++){
+  let previousDepth=Infinity;
+  for(const score of [500,700,900]){
+   const end=playDuration(score,bases);
+   const ballAt=time=>playScene(score,bases,time,false,atBat).ball;
+   for(let time=MOTION.contact;time<end;time+=8){
+    const {x,y,groundY,size}=ballAt(time);
+    // Leave clearance from the outfield wall and the portrait crop.
+    assert.ok(x-size-1>=150&&x+size+1<=800);
+    assert.ok(Math.min(y,groundY)-size-1>=272);
+   }
+   const settled=ballAt(end);
+   assert.deepEqual(settled,ballAt(Infinity));
+   assert.ok(settled.groundY<previousDepth);
+   previousDepth=settled.groundY;
+  }
+ }
 });
 
 test('pitcher plays the matching reaction after the result',()=>{
