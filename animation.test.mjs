@@ -9,6 +9,9 @@ const {routePoint,runnerRoute}=context.routes;
 test('portrait runner endpoints align with the stadium bags and fit iPhone framing',()=>{
  const ctx=vm.createContext({});
  vm.runInContext(source.slice(source.indexOf('const portraitX='),source.indexOf('function portraitPlayer'))+';globalThis.project=(x,y)=>[portraitX(x),portraitY(y)];',ctx);
+ const start=routePoint(0,1,0,true,true);
+ const [batterX,batterY]=ctx.project(start.x,start.y);
+ assert.ok(batterX>294&&batterX<331&&batterY>1020&&batterY<1047);
  const bagCenters=[[605,884],[376,790],[141,884],[376,1028]];
  for(let steps=1;steps<=4;steps++){
   const {x,y}=routePoint(0,steps,1,true);
@@ -39,6 +42,17 @@ test('Higgsfield frames face correctly on all four legs without deforming sprite
 const timelineContext=vm.createContext({});
 vm.runInContext(source.slice(source.indexOf('const basePoints='),source.indexOf('const CLIPS='))+source.slice(source.indexOf('const routeCache='),source.indexOf('function walkUp('))+';globalThis.timeline={playScene,playDuration,runnerRoute,pitcherReaction,MOTION};',timelineContext);
 const {playScene,playDuration,MOTION}=timelineContext.timeline;
+test('portrait batter starts a run and walks out from the same box',()=>{
+ const bases=[false,false,false];
+ const runner=playScene(900,bases,MOTION.runStart,false,0,true).runners[0];
+ const exiting=playScene(250,bases,MOTION.outStart,false,0,true).runners[0];
+ assert.deepEqual([runner.x,runner.y],[exiting.x,exiting.y]);
+ for(const score of [0,500,700,900,1000]){
+  const pitch=playScene(score,bases,MOTION.contact-.01,false,0,true).ball;
+  const hit=playScene(score,bases,MOTION.contact,false,0,true).ball;
+  assert.ok(Math.hypot(hit.x-pitch.x,hit.y-pitch.y)<.01);
+ }
+});
 test('ball rolls after landing and remains on the field except on a home run',()=>{
  const bases=[false,false,false];
  const scene=(score,time,index=0)=>playScene(score,bases,MOTION.contact+time,false,index).ball;
@@ -56,11 +70,11 @@ test('ball rolls after landing and remains on the field except on a home run',()
 
 test('singles, doubles and triples stay on the field in every hit lane',()=>{
  const bases=[false,false,false];
- for(let atBat=0;atBat<5;atBat++){
+ for(const portrait of [false,true])for(let atBat=0;atBat<5;atBat++){
   let previousDepth=Infinity;
   for(const score of [500,700,900]){
-   const end=playDuration(score,bases);
-   const ballAt=time=>playScene(score,bases,time,false,atBat).ball;
+   const end=playDuration(score,bases,portrait);
+   const ballAt=time=>playScene(score,bases,time,false,atBat,portrait).ball;
    for(let time=MOTION.contact;time<end;time+=8){
     const {x,y,groundY,size}=ballAt(time);
     // Leave clearance from the outfield wall and the portrait crop.

@@ -374,8 +374,9 @@ function draw(ball=previousPlayBall(),pose=0,movers=null,options={}){
   runningPlayer(runner,spriteTime,drawPlayer);
  }
  if(!options.hideBatter&&['question','scoring','submit-error','animating'].includes(state.phase)){
-  if(pose<1)drawPlayer('batterIdle',422,507,125);
-  else drawPlayer('batterSwingClip',422,507,125,(options.time??0)-MOTION.swingStart);
+  const [x,y]=batterPosition(portrait);
+  if(pose<1)drawPlayer('batterIdle',x,y,125);
+  else drawPlayer('batterSwingClip',x,y,125,(options.time??0)-MOTION.swingStart);
  }
  if(ball&&portrait){
   let x=portraitX(ball.x),y=portraitY(ball.y);
@@ -406,9 +407,12 @@ function drawBaseball({x,y,size,spin,groundY}){
 }
 // Sample rounded corners once, then traverse by actual distance at a shared speed.
 const routeCache=new Map();
-function runnerRoute(start,steps,batter=false){
- const key=[start,steps,batter].join(':');if(routeCache.has(key))return routeCache.get(key);
- const points=[batter?[422,515]:basePoints[start],...Array.from({length:steps},(_,i)=>basePoints[Math.min(4,start+i+1)])];
+const BATTER_POSITION=[422,507],PORTRAIT_BATTER_POSITION=[398,487];
+function batterPosition(portrait){return portrait?PORTRAIT_BATTER_POSITION:BATTER_POSITION;}
+function runnerRoute(start,steps,batter=false,portrait=false){
+ const key=[start,steps,batter,batter&&portrait].join(':');if(routeCache.has(key))return routeCache.get(key);
+ const [x,y]=batterPosition(portrait);
+ const points=[batter?[x,y+8]:basePoints[start],...Array.from({length:steps},(_,i)=>basePoints[Math.min(4,start+i+1)])];
  const samples=[points[0]];
  for(let i=1;i<points.length;i++){
   const p=points[i],prev=points[i-1],next=points[i+1];
@@ -420,8 +424,8 @@ function runnerRoute(start,steps,batter=false){
  let length=0;const segments=samples.slice(1).map((b,i)=>{const a=samples[i],size=Math.hypot(b[0]-a[0],b[1]-a[1]);const seg={a,b,size,offset:length};length+=size;return seg;});
  const route={segments,length};routeCache.set(key,route);return route;
 }
-function routePoint(start,steps,t,batter=false){
- const route=runnerRoute(start,steps,batter),distance=Math.max(0,Math.min(1,t))*route.length;
+function routePoint(start,steps,t,batter=false,portrait=false){
+ const route=runnerRoute(start,steps,batter,portrait),distance=Math.max(0,Math.min(1,t))*route.length;
  const seg=route.segments.find(s=>distance<=s.offset+s.size)||route.segments.at(-1);
  const u=Math.min(1,(distance-seg.offset)/seg.size),{a,b}=seg;
  return {x:a[0]+(b[0]-a[0])*u,y:a[1]+(b[1]-a[1])*u-8,dx:b[0]-a[0],dy:b[1]-a[1]};
@@ -438,9 +442,9 @@ function scoringActor(id,elapsed){
  const exitTime=elapsed-MOTION.celebrate;
  return exitTime<MOTION.exit-1e-7?walkActor(id,[480,480],[1050,555],exitTime/MOTION.exit):null;
 }
-function playDuration(score,previousBases){
+function playDuration(score,previousBases,portrait=false){
  const steps=hitSteps(score);if(!steps)return MOTION.outStart+MOTION.exit;
- let end=MOTION.runStart+runnerRoute(0,steps,true).length/MOTION.speed+(steps===4?MOTION.celebrate+MOTION.exit:180);
+ let end=MOTION.runStart+runnerRoute(0,steps,true,portrait).length/MOTION.speed+(steps===4?MOTION.celebrate+MOTION.exit:180);
  for(let i=0;i<3;i++)if(previousBases[i]&&i+1+steps>=4){
   const arrival=MOTION.runStart+runnerRoute(i+1,3-i).length/MOTION.speed;
   end=Math.max(end,arrival+MOTION.celebrate+MOTION.exit);
@@ -448,6 +452,7 @@ function playDuration(score,previousBases){
  return end;
 }
 const CONTACT_POINT={x:474,y:445};
+const PORTRAIT_CONTACT_OFFSET={x:PORTRAIT_BATTER_POSITION[0]-BATTER_POSITION[0],y:PORTRAIT_BATTER_POSITION[1]-BATTER_POSITION[1]};
 const PITCH_RELEASE={x:462,y:335};
 const HIT_LANES=[-1,.5,0,1,-.5];
 // Fair-hit depths leave room for the full 24% roll before either stadium's wall.
@@ -459,22 +464,23 @@ const BALL_PATHS=[
  {spread:255,depth:135,arc:70,flight:740,roll:1150},
  {spread:370,depth:315,arc:132,flight:970,roll:0}
 ];
-function ballAfterSwing(score,atBat,elapsed){
+function ballAfterSwing(score,atBat,elapsed,portrait=false){
  const steps=hitSteps(score),path=BALL_PATHS[steps];
  const lane=HIT_LANES[atBat%HIT_LANES.length];
  const age=Math.max(0,elapsed);
  if(steps===4&&age>=path.flight)return null;
  if(score===0){
   const u=Math.min(1,age/670),distance=1-(1-u)**2;
-  const y=CONTACT_POINT.y+83*distance;
-  return {x:CONTACT_POINT.x+14*distance,y,size:3.8,spin:distance*12,groundY:y};
+  const x=CONTACT_POINT.x+14*distance+(portrait?PORTRAIT_CONTACT_OFFSET.x*(1-distance):0);
+  const y=CONTACT_POINT.y+83*distance+(portrait?PORTRAIT_CONTACT_OFFSET.y*(1-distance):0);
+  return {x,y,size:3.8,spin:distance*12,groundY:y};
  }
  const flight=Math.min(1,age/path.flight);
  const roll=path.roll?Math.min(1,Math.max(0,(age-path.flight)/path.roll)):0;
  const rollDistance=1-(1-roll)**2;
  const distance=flight+(steps===4?0:.24*rollDistance);
- const x=CONTACT_POINT.x+lane*path.spread*distance;
- const groundY=CONTACT_POINT.y-path.depth*distance;
+ const x=CONTACT_POINT.x+lane*path.spread*distance+(portrait?PORTRAIT_CONTACT_OFFSET.x*(1-flight):0);
+ const groundY=CONTACT_POINT.y-path.depth*distance+(portrait?PORTRAIT_CONTACT_OFFSET.y*(1-flight):0);
  const bounce=roll<.2?Math.sin(roll/.2*Math.PI)*(steps?5:2):0;
  const y=groundY-path.arc*4*flight*(1-flight)-bounce;
  return {x,y,size:Math.max(2,4-distance*1.35),spin:distance*25,groundY};
@@ -491,24 +497,26 @@ function previousPlayBall(){
  const atBat=state.history.length-1,last=state.history[atBat];
  return last?ballAfterSwing(last.score,atBat,Infinity):null;
 }
-function playScene(score,previousBases,elapsed,cleared=false,atBat=0){
+function playScene(score,previousBases,elapsed,cleared=false,atBat=0,portrait=false){
  const steps=hitSteps(score),scene={ball:null,pose:0,runners:baseRunners(previousBases),hideBatter:false};
  if(elapsed<MOTION.contact){
   scene.pose=elapsed<MOTION.swingStart?0:1;
   if(elapsed>=MOTION.release){
    const u=(elapsed-MOTION.release)/(MOTION.contact-MOTION.release);
-   scene.ball={x:PITCH_RELEASE.x+(CONTACT_POINT.x-PITCH_RELEASE.x)*u,y:PITCH_RELEASE.y+(CONTACT_POINT.y-PITCH_RELEASE.y)*u-9*Math.sin(u*Math.PI),size:2+2*u,spin:u*17};
+   const contactX=CONTACT_POINT.x+(portrait?PORTRAIT_CONTACT_OFFSET.x:0);
+   const contactY=CONTACT_POINT.y+(portrait?PORTRAIT_CONTACT_OFFSET.y:0);
+   scene.ball={x:PITCH_RELEASE.x+(contactX-PITCH_RELEASE.x)*u,y:PITCH_RELEASE.y+(contactY-PITCH_RELEASE.y)*u-9*Math.sin(u*Math.PI),size:2+2*u,spin:u*17};
   }
   return scene;
  }
  scene.pose=elapsed<MOTION.contact+130?2:3;
- scene.ball=ballAfterSwing(score,atBat,elapsed-MOTION.contact);
+ scene.ball=ballAfterSwing(score,atBat,elapsed-MOTION.contact,portrait);
  if(!steps){
   if(elapsed>=MOTION.outStart){
    scene.hideBatter=true;
    const progress=(elapsed-MOTION.outStart)/MOTION.exit;
    scene.runners=cleared?scene.runners.filter(r=>progress<1).map(r=>walkActor(r.id,[r.x,r.y],[1050,555],progress)):scene.runners;
-   if(progress<1)scene.runners.push(walkActor(0,[422,507],[-100,555],progress));
+   if(progress<1)scene.runners.push(walkActor(0,batterPosition(portrait),[-100,555],progress));
   }
   return scene;
  }
@@ -516,10 +524,10 @@ function playScene(score,previousBases,elapsed,cleared=false,atBat=0){
  scene.hideBatter=true;scene.runners=[];
  const runTime=elapsed-MOTION.runStart;
  function runner(start,travel,id,batter=false){
-  const duration=runnerRoute(start,travel,batter).length/MOTION.speed;
+  const duration=runnerRoute(start,travel,batter,portrait).length/MOTION.speed;
   if(start+travel===4&&runTime>=duration){const actor=scoringActor(id,runTime-duration);if(actor)scene.runners.push(actor);return;}
   const progress=Math.min(1,runTime/duration);
-  scene.runners.push({...routePoint(start,travel,progress,batter),id,moving:progress<1});
+  scene.runners.push({...routePoint(start,travel,progress,batter,portrait),id,moving:progress<1});
  }
  for(let i=0;i<3;i++)if(previousBases[i])runner(i+1,Math.min(steps,3-i),i+1);
  runner(0,steps,0,true);
@@ -530,16 +538,17 @@ function walkUp(done){
  const start=performance.now();
  function frame(now){
   const progress=Math.min(1,(now-start)*1.35/MOTION.entry);
-  draw(null,0,null,{hideBatter:true,time:now,actors:[walkActor(0,[-100,555],[422,507],progress,'batterWalk')]});
+  draw(null,0,null,{hideBatter:true,time:now,actors:[walkActor(0,[-100,555],batterPosition(portraitView.matches),progress,'batterWalk')]});
   if(progress<1)requestAnimationFrame(frame);else done();
  }
  requestAnimationFrame(frame);
 }
 function animate(score,previousBases,cleared=false){
- const reduced=reducedMotion(),duration=reduced?90:playDuration(score,previousBases),startTime=performance.now();beginCrowdReaction(score,startTime);
+ const reduced=reducedMotion(),startTime=performance.now();beginCrowdReaction(score,startTime);
  function frame(now){
+  const portrait=portraitView.matches,duration=reduced?90:playDuration(score,previousBases,portrait);
   const elapsed=Math.min(duration,(now-startTime)*(reduced?1:1.5));
-  const scene=reduced?{ball:null,pose:0,runners:baseRunners(state.bases),hideBatter:true}:playScene(score,previousBases,elapsed,cleared,state.index);
+  const scene=reduced?{ball:null,pose:0,runners:baseRunners(state.bases),hideBatter:true}:playScene(score,previousBases,elapsed,cleared,state.index,portrait);
   const call=$('#play-call');
   if(!call.textContent&&(elapsed>MOTION.contact+200||reduced))call.textContent=result(score).toUpperCase()+'!';
   draw(scene.ball,scene.pose,scene.runners,{hideBatter:scene.hideBatter,time:elapsed});
