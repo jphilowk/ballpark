@@ -4,7 +4,7 @@ import {readFile} from 'node:fs/promises';
 import vm from 'node:vm';
 const source=await readFile('src/ballpark.js','utf8');
 const context=vm.createContext({});
-vm.runInContext(source.slice(source.indexOf('const basePoints='),source.indexOf('function player('))+source.slice(source.indexOf('const routeCache='),source.indexOf('function animate('))+';globalThis.routes={routePoint,runnerRoute};',context);
+vm.runInContext(source.slice(source.indexOf('const basePoints='),source.indexOf('const CLIPS='))+source.slice(source.indexOf('const routeCache='),source.indexOf('function animate('))+';globalThis.routes={routePoint,runnerRoute};',context);
 const {routePoint,runnerRoute}=context.routes;
 test('second to third and third to home face toward the camera and touch bases',()=>{
  for(const [start,end,dx] of [[2,[185,375],-1],[3,[480,480],1]]){const mid=routePoint(start,1,.5);assert.ok(mid.dy>0);assert.equal(Math.sign(mid.dx),dx);const finish=routePoint(start,1,1);assert.equal(finish.x,end[0]);assert.equal(finish.y,end[1]);}
@@ -16,13 +16,44 @@ test('Higgsfield frames face correctly on all four legs without deforming sprite
  const calls=[];const c={save(){},restore(){},translate(){},scale(...args){calls.push(['flip',...args]);},drawImage(...args){calls.push(['draw',...args]);}};
  const front={},back={},idle={};const ctx=vm.createContext({c,art:{runnerFront:front,runnerBack:back,runnerIdle:idle},matchMedia:()=>({matches:false})});
  vm.runInContext(source.slice(source.indexOf('const CLIPS='),source.indexOf('function draw('))+';globalThis.runner=runningPlayer;',ctx);
- for(const [dx,dy,image,flipped] of [[292,-105,back,false],[-292,-68,back,true],[-295,68,front,false],[295,105,front,true]]){calls.length=0;ctx.runner({x:480,y:380,dx,dy,moving:true,id:0},240);const draw=calls.find(x=>x[0]==='draw');assert.equal(draw[1],image);assert.equal(draw[2],3*384);assert.equal(draw[4],384);assert.equal(draw[5],384);assert.equal(calls.some(x=>x[0]==='flip'),flipped);}
+ for(const [dx,dy,image,flipped] of [[292,-105,back,false],[-292,-68,back,true],[-295,68,front,false],[295,105,front,true]]){calls.length=0;ctx.runner({x:480,y:380,dx,dy,moving:true,id:0},240);const draw=calls.find(x=>x[0]==='draw');assert.equal(draw[1],image);assert.equal(draw[2],0);assert.equal(draw[3],384);assert.equal(draw[4],384);assert.equal(draw[5],384);assert.equal(calls.some(x=>x[0]==='flip'),flipped);}
  calls.length=0;ctx.runner({x:480,y:380,moving:false},999);assert.equal(calls.find(x=>x[0]==='draw')[1],idle);
 });
 
 const timelineContext=vm.createContext({});
-vm.runInContext(source.slice(source.indexOf('const basePoints='),source.indexOf('function player('))+source.slice(source.indexOf('const routeCache='),source.indexOf('function walkUp('))+';globalThis.timeline={playScene,playDuration,runnerRoute,MOTION};',timelineContext);
+vm.runInContext(source.slice(source.indexOf('const basePoints='),source.indexOf('const CLIPS='))+source.slice(source.indexOf('const routeCache='),source.indexOf('function walkUp('))+';globalThis.timeline={playScene,playDuration,runnerRoute,pitcherReaction,MOTION};',timelineContext);
 const {playScene,playDuration,MOTION}=timelineContext.timeline;
+test('ball rolls after landing and remains on the field except on a home run',()=>{
+ const bases=[false,false,false];
+ const scene=(score,time,index=0)=>playScene(score,bases,MOTION.contact+time,false,index).ball;
+ assert.equal(playScene(500,bases,MOTION.release-1).ball,null);
+ assert.ok(Math.abs(scene(500,0).x-playScene(500,bases,MOTION.contact-1).ball.x)<1);
+ const left=scene(500,1800,0),right=scene(500,1800,3);
+ assert.ok(left.x<474&&right.x>474);
+ assert.notEqual(scene(500,430).x,scene(500,900).x);
+ assert.equal(left.y,left.groundY);
+ assert.deepEqual(left,scene(500,10000));
+ for(const score of [0,250,500,700,900])assert.ok(scene(score,10000));
+ assert.ok(scene(1000,500));
+ assert.equal(scene(1000,10000),null);
+});
+
+test('pitcher plays the matching reaction after the result',()=>{
+ const {pitcherReaction}=timelineContext.timeline;
+ for(const score of [0,250]){
+  assert.equal(pitcherReaction(score,MOTION.contact),null);
+  assert.equal(pitcherReaction(score,MOTION.outStart).clip,'pitcherCheer');
+ }
+ assert.equal(pitcherReaction(1000,MOTION.outStart),null);
+ assert.equal(pitcherReaction(1000,MOTION.contact+970).clip,'pitcherCry');
+ for(const [score,clip,flight] of [[500,'pitcherSingle',430],[700,'pitcherDouble',620],[900,'pitcherTriple',740]]){
+  const landing=MOTION.contact+flight;
+  assert.equal(pitcherReaction(score,landing-1),null);
+  assert.equal(pitcherReaction(score,landing).clip,clip);
+  assert.equal(pitcherReaction(score,landing+110).time,110);
+ }
+});
+
 test('each scorer celebrates at home, then walks fully offscreen',()=>{
  for(const score of [500,700,900,1000]){
   const previous=[true,true,true];
@@ -64,7 +95,7 @@ test('celebration plays once and reduced motion freezes all clips',()=>{
  let reduced=false;const calls=[];const image={};const c={save(){},restore(){},translate(){},scale(){},drawImage(...args){calls.push(args);}};
  const ctx=vm.createContext({c,art:{runnerCelebrate:image,runnerIdle:image},matchMedia:()=>({matches:reduced})});
  vm.runInContext(source.slice(source.indexOf('const CLIPS='),source.indexOf('function draw('))+';globalThis.atlas=atlasPlayer;',ctx);
- ctx.atlas('runnerCelebrate',480,480,91,5000);assert.equal(calls.at(-1)[1],3*384);assert.equal(calls.at(-1)[2],3*384);
+ ctx.atlas('runnerCelebrate',480,480,91,5000);assert.equal(calls.at(-1)[1],3*384);assert.equal(calls.at(-1)[2],384);
  reduced=true;ctx.atlas('runnerIdle',480,480,91,5000);assert.equal(calls.at(-1)[1],0);assert.equal(calls.at(-1)[2],0);
 });
 

@@ -1,4 +1,4 @@
-const ASSETS={"skyClouds":"./assets/skyClouds.png","skyMask":"./assets/skyMask.png","skyBirds":"./assets/skyBirds.png","crowdCheer":"./assets/crowdCheer.png","batterIdle":"./assets/batterIdle.png","batterSwingClip":"./assets/batterSwingClip.png","runnerIdle":"./assets/runnerIdle.png","runnerCelebrate":"./assets/runnerCelebrate.png","batterWalk":"./assets/batterWalk.png","playerWalk":"./assets/playerWalk.png","runnerFront":"./assets/runnerFront.png","runnerBack":"./assets/runnerBack.png","stadium": "./assets/stadiumAmbient.png", "batterReady": "./assets/batterReady.png", "batterSwing": "./assets/batterSwing.png", "batterFollow": "./assets/batterFollow.png", "batterCelebrate": "./assets/batterCelebrate.png", "pitcherReady": "./assets/pitcherReady.png", "pitcherThrow": "./assets/pitcherThrow.png", "fielder": "./assets/fielder.png", "runner": "./assets/runner.png"};
+const ASSETS={"skyClouds":"./assets/skyClouds.png","skyMask":"./assets/skyMask.png","skyBirds":"./assets/skyBirds.png","crowdCheer":"./assets/crowdCheer.png","batterIdle":"./assets/batterIdle.png","batterSwingClip":"./assets/batterSwingClip.png","runnerIdle":"./assets/runnerIdle.png","runnerCelebrate":"./assets/runnerCelebrate.png","batterWalk":"./assets/batterWalk.png","playerWalk":"./assets/playerWalk.png","runnerFront":"./assets/runnerFront.png","runnerBack":"./assets/runnerBack.png","stadium":"./assets/stadiumAmbient.png","pitcherDelivery":"./assets/pitcherDelivery.png","pitcherCheer":"./assets/pitcherCheer.png","pitcherCry":"./assets/pitcherCry.png","pitcherSingle":"./assets/pitcherSingle.png","pitcherDouble":"./assets/pitcherDouble.png","pitcherTriple":"./assets/pitcherTriple.png","defenderIdle":"./assets/defenderIdle.png"};
 import {points} from '../lib/scoring.mjs';
 function result(score){return score===1000?'Home run':score>=800?'Triple':score>=600?'Double':score>=400?'Single':score>0?'Out':'Strikeout';}
 function advance(bases,outs,score){const label=result(score);const steps=label==='Home run'?4:label==='Triple'?3:label==='Double'?2:label==='Single'?1:0;let runs=0;let next=[false,false,false];if(!steps){outs++;return {bases:outs===3?next:[...bases],outs:outs===3?0:outs,runs:0,cleared:outs===3};}for(let i=0;i<3;i++)if(bases[i]){if(i+steps>=3)runs++;else next[i+steps]=true;}if(steps===4)runs++;else next[steps-1]=true;return {bases:next,outs,runs,cleared:false};}
@@ -92,15 +92,40 @@ async function start(){
  walkUp(()=>{state.phase='question';state.deadline=Date.now()+20000;save();render();});
 }
 function render(){fadeOutPanels();document.body.dataset.phase=state.phase;hud();$('#play-call').textContent='';
-if(state.phase==='welcome'){panel.innerHTML=`<div class="prompt-card welcome"><h1>Ballpark</h1><p class="welcome-copy">${escapeHtml(contentError||(!contentReady?"Loading today’s game…":daily?.mode==='daily'?"Five sports. Five at-bats.":"Practice · Five sports. Five at-bats."))}</p><button class="primary" id="start">Play</button></div>`;refreshStartButton();$('#start').onclick=contentError&&!contentReady?bootstrap:start;}
-else if(state.phase==='question'){const q=questions[state.index];panel.innerHTML=`<div class="prompt-card"><div class="sport">${escapeHtml(q.sport)} · AT BAT ${state.index+1} OF 5</div><h2>${escapeHtml(q.q)}</h2></div><form id="guess-form" class="answer-dock"><span class="timer" role="timer" aria-label="Seconds remaining">20</span><div class="input-wrap"><input id="guess" type="text" inputmode="decimal" autocomplete="off" aria-label="Your guess in ${escapeHtml(q.unit)}" placeholder="Number"/><div class="track"><div></div></div></div><button class="primary" type="submit">Swing</button><div class="error" id="error" role="alert"></div></form>`;$('#guess').value=state.draft;$('#guess').oninput=e=>{state.draft=e.target.value;save();};$('#guess-form').onsubmit=e=>{e.preventDefault();submit(false);};if(!matchMedia('(pointer:coarse)').matches)$('#guess').focus({preventScroll:true});tick();}
+if(state.phase==='welcome'){panel.innerHTML=`<div class="prompt-card welcome"><h1>Ballparkle</h1><p class="welcome-copy">${escapeHtml(contentError||(!contentReady?"Loading today’s game…":daily?.mode==='daily'?"Five sports. Five at-bats.":"Practice · Five sports. Five at-bats."))}</p><button class="primary" id="start">Play</button></div>`;refreshStartButton();$('#start').onclick=contentError&&!contentReady?bootstrap:start;}
+else if(state.phase==='question'){const q=questions[state.index];panel.innerHTML=`<div class="prompt-card"><div class="sport">${escapeHtml(q.sport)} · AT BAT ${state.index+1} OF 5</div><h2>${escapeHtml(q.q)}</h2></div><form id="guess-form" class="answer-dock"><span class="timer" role="timer" aria-label="Seconds remaining">20</span><div class="input-wrap"><input id="guess" type="text" inputmode="decimal" autocomplete="off" aria-label="Your guess in ${escapeHtml(q.unit)}" placeholder="Number" aria-describedby="error"/><div class="track"><div></div></div></div><button class="primary" type="submit">Swing</button><div class="error" id="error" role="alert"></div></form>`;$('#guess').value=state.draft;$('#guess').oninput=e=>{state.draft=e.target.value;$('#error').textContent='';save();};$('#guess-form').onsubmit=e=>{e.preventDefault();submit(false);};if(!matchMedia('(pointer:coarse)').matches)$('#guess').focus({preventScroll:true});tick();}
 else if(state.phase==='reveal'){const last=state.history.at(-1),q=questions[state.index];panel.innerHTML=`<div class="prompt-card reveal"><div class="sport">${result(last.score).toUpperCase()} · +${last.score}</div><div class="answers"><div><small>YOUR GUESS</small><strong>${last.guess===null?'—':last.guess.toLocaleString()}</strong></div><div><small>ANSWER</small><strong>${q.answer.toLocaleString()}</strong></div></div><details><summary>Details</summary><p>${escapeHtml(q.fact)}</p><a href="${escapeHtml(q.url)}" target="_blank" rel="noopener">${escapeHtml(q.source)}</a></details></div><div class="answer-dock single"><button class="primary" id="next">${state.index===4?'Results':'Next'}</button></div>`;$('#next').onclick=()=>{if(state.index===4){state.phase='finished';save();render();}else{state.index++;start();}};}
 else if(['animating','entering'].includes(state.phase)){panel.innerHTML='';}
 else if(['loading','scoring'].includes(state.phase)){panel.innerHTML=`<div class="prompt-card welcome"><p class="welcome-copy">${state.phase==='loading'?'Getting the next at-bat…':'Saving your swing…'}</p></div>`;}
 else if(state.phase==='submit-error'){panel.innerHTML=`<div class="prompt-card welcome"><p class="welcome-copy">That swing couldn’t be saved. Try again.</p><button class="primary" id="retry-swing">Retry</button></div>`;$('#retry-swing').onclick=()=>submit(state.pendingTimed);}
-else{panel.innerHTML=`<div class="prompt-card final"><div class="sport">FINAL</div><h1>${total().toLocaleString()}<small> / 5,000</small></h1><div class="finish-runs">${state.runs} RUN${state.runs===1?'':'S'}</div><div class="finish-hits">${state.history.map(h=>abbr(result(h.score))).join(' · ')}</div></div><div class="answer-dock single"><button class="primary" id="share">Share</button>${daily?.mode==='daily'?'':'<button class="secondary" id="again">Play again</button>'}<div id="share-status" role="status"></div></div>`;$('#share').onclick=async()=>{const text=`BALLPARK ${daily?.mode==='daily'?date:'PRACTICE'}\n${total().toLocaleString()} / 5,000 · ${state.runs} runs\n${state.history.map(h=>abbr(result(h.score))).join(' · ')}`;try{await navigator.clipboard.writeText(text);$('#share-status').textContent='Copied';}catch{$('#share-status').textContent=text;}};const again=$('#again');if(again)again.onclick=()=>{state=initial();if(daily){state.token=daily.token;questions=Array(5).fill(null);}save();render();};}syncMobileViewport();fadeInPanels();}
+else renderBoxScore();
+syncMobileViewport();fadeInPanels();}
 
-function parse(raw){if(!/^\d+(\.\d+)?$/.test(raw.trim()))return null;const n=Number(raw);return Number.isFinite(n)?n:null;}
+function renderBoxScore(){
+ const rows=state.history.map((atBat,i)=>`<tr><th scope="row">${i+1} · ${escapeHtml(questions[i]?.sport||'At bat')}</th><td>${result(atBat.score)}</td><td>${atBat.score.toLocaleString()}</td></tr>`).join('');
+ panel.innerHTML=`<div class="prompt-card final">
+  <h2>Final box score</h2>
+  <div class="box-total">${total().toLocaleString()}<small> / 5,000</small></div>
+  <div class="finish-runs">${state.runs} RUN${state.runs===1?'':'S'}</div>
+  <table class="box-score" aria-label="At-bat results">
+   <thead><tr><th scope="col">At bat</th><th scope="col">Result</th><th scope="col">Points</th></tr></thead>
+   <tbody>${rows}</tbody>
+  </table>
+  <div class="box-actions"><button class="primary" id="share">Copy result</button>${daily?.mode==='daily'?'':'<button class="secondary" id="again">Play again</button>'}</div>
+  <div id="share-status" role="status"></div>
+  <textarea id="share-text" aria-label="Result to copy" readonly hidden></textarea>
+ </div>`;
+ $('#share').onclick=async()=>{
+  const text=`BALLPARKLE ${daily?.mode==='daily'?date:'PRACTICE'}\n${total().toLocaleString()} / 5,000 · ${state.runs} run${state.runs===1?'':'s'}\n${state.history.map(h=>abbr(result(h.score))).join(' · ')}`;
+  const status=$('#share-status'),fallback=$('#share-text');
+  try{await navigator.clipboard.writeText(text);status.textContent='Copied';fallback.hidden=true;}
+  catch{status.textContent='Select and copy your result.';fallback.value=text;fallback.hidden=false;fallback.select();}
+ };
+ const again=$('#again');
+ if(again)again.onclick=()=>{state=initial();if(daily){state.token=daily.token;questions=Array(5).fill(null);}save();render();};
+}
+
+function parse(raw){const input=raw.trim();if(!/^(?:(?:\d+|\d{1,3}(?:,\d{3})+)(?:\.\d*)?|\.\d+)$/.test(input))return null;const n=Number(input.replaceAll(',',''));return Number.isFinite(n)?n:null;}
 async function submit(timed){
  if(!['question','submit-error'].includes(state.phase))return;
  const retry=state.phase==='submit-error';
@@ -109,7 +134,14 @@ async function submit(timed){
  if(!retry&&!timed&&guess===null){$('#error').textContent='Enter a positive number or zero.';return;}
  const previousBases=[...state.bases];let score;
  if(daily){
-  state.pendingGuess=guess;state.pendingTimed=timed;state.phase='scoring';state.deadline=null;save();$('#guess')?.blur();render();
+  state.pendingGuess=guess;state.pendingTimed=timed;state.phase='scoring';state.deadline=null;save();
+  const form=$('#guess-form');
+  if(form){
+   form.querySelector('button').disabled=true;
+   $('#guess').readOnly=true;
+   $('#guess').blur();
+   $('#error').textContent='Saving your swing…';
+  }else render();
   try{const response=await apiCall('/api/score',{token:state.token,guess,timed});score=response.score;Object.assign(questions[state.index],{answer:response.answer,fact:response.fact,source:response.source,url:response.url});state.questions[state.index]=questions[state.index];state.token=response.token;}
   catch{state.phase='submit-error';save();render();return;}
  }else score=points(guess,questions[state.index].answer,questions[state.index].sport);
@@ -126,18 +158,21 @@ const art={};let artReady=false,animationPose=0;
 const artEntries=Object.entries(ASSETS);
 Promise.all([document.fonts.load('700 24px BallparkPixel'),...artEntries.map(([name,url])=>new Promise(resolve=>{const im=new Image();im.onload=()=>{art[name]=im;resolve();};im.onerror=()=>resolve();im.src=url;}))]).then(()=>{if(art.skyMask)buildSkyTintMask();artReady=Object.keys(art).length===artEntries.length;draw();refreshStartButton();});
 const basePoints=[[480,488],[772,383],[480,315],[185,383],[480,488]];
-function player(name,x,y,h){const im=art[name];if(!im)return;const ref=name.startsWith('batter')?art.batterReady:name.startsWith('pitcher')?art.pitcherReady:im;const ratio=h/ref.naturalHeight;const w=im.naturalWidth*ratio,actualH=im.naturalHeight*ratio;c.drawImage(im,Math.round(x-w/2),Math.round(y-actualH),Math.round(w),Math.round(actualH));}
-// Every pose comes from a Higgsfield clip; canvas only selects and places frames.
+// Canvas selects frames from the approved sprite sheets.
 const CLIPS={
- runnerFront:{ms:80},runnerBack:{ms:80},
- batterIdle:{ms:110},batterSwingClip:{ms:40,once:true},runnerIdle:{ms:110},
- runnerCelebrate:{ms:45,once:true},batterWalk:{ms:45},playerWalk:{ms:45}
+ runnerFront:{ms:60,frames:8},runnerBack:{ms:60,frames:8},
+ batterIdle:{ms:120,frames:1},batterSwingClip:{ms:50,frames:8,once:true},
+ runnerIdle:{ms:120,frames:8},runnerCelebrate:{ms:90,frames:8,once:true},
+ defenderIdle:{ms:120,frames:8},pitcherDelivery:{ms:50,frames:12,once:true},
+ pitcherCheer:{ms:110,frames:8,once:true},pitcherCry:{ms:110,frames:8,once:true},
+ pitcherSingle:{ms:110,frames:8,once:true},pitcherDouble:{ms:110,frames:8,once:true},pitcherTriple:{ms:110,frames:8,once:true},
+ batterWalk:{ms:100,frames:8},playerWalk:{ms:100,frames:8}
 };
 function atlasPlayer(name,x,y,height,time=0,mirror=false,offset=0){
  const im=art[name];if(!im)return;
  const clip=CLIPS[name],freeze=reducedMotion();
  const step=freeze?0:Math.floor(Math.max(0,time)/clip.ms+offset);
- const frame=clip.once?Math.min(15,step):step%16,scale=height/362;
+ const frame=clip.once?Math.min(clip.frames-1,step):step%clip.frames,scale=height/362;
  c.save();c.translate(Math.round(x),Math.round(y));if(mirror)c.scale(-1,1);
  c.drawImage(im,(frame%4)*384,Math.floor(frame/4)*384,384,384,-192*scale,-374*scale,384*scale,384*scale);
  c.restore();
@@ -283,13 +318,34 @@ function drawCrowd(now){
  }
  c.restore();
 }
-function draw(ball=null,pose=0,movers=null,options={}){c.clearRect(0,0,960,540);if(!art.stadium){c.fillStyle='#244a35';c.fillRect(0,0,960,540);return;}c.drawImage(art.stadium,0,0,960,540);drawSky(performance.now());drawCrowd(performance.now());c.textAlign='center';c.fillStyle='#e5d9a2';c.font='700 10px BallparkPixel';c.fillText('POINTS',480,119);c.fillStyle='#ffcf64';c.font='700 30px ui-monospace, monospace';c.fillText(String(total()).padStart(4,'0'),480,146);c.fillStyle='#a8b68d';c.fillRect(401,153,158,1);c.fillStyle='#fff2c9';c.font='700 12px ui-monospace, monospace';c.fillText('RUNS '+state.runs,434,169);c.fillText('OUTS '+state.outs,525,169);c.font='400 10px BallparkPixel';c.fillStyle='#c6c69e';c.fillText(state.phase==='finished'?'FINAL':'AT BAT '+(state.phase==='welcome'?0:state.index+1)+' / 5',480,184);
-player('fielder',252,320,38);player('fielder',707,321,38);player('fielder',480,280,32);player('pitcher'+(pose===1?'Throw':'Ready'),480,381,69);
+function draw(ball=previousPlayBall(),pose=0,movers=null,options={}){c.clearRect(0,0,960,540);if(!art.stadium){c.fillStyle='#244a35';c.fillRect(0,0,960,540);return;}c.drawImage(art.stadium,0,0,960,540);drawSky(performance.now());drawCrowd(performance.now());c.textAlign='center';c.fillStyle='#e5d9a2';c.font='700 10px BallparkPixel';c.fillText('POINTS',480,119);c.fillStyle='#ffcf64';c.font='700 30px ui-monospace, monospace';c.fillText(String(total()).padStart(4,'0'),480,146);c.fillStyle='#a8b68d';c.fillRect(401,153,158,1);c.fillStyle='#fff2c9';c.font='700 12px ui-monospace, monospace';c.fillText('RUNS '+state.runs,434,169);c.fillText('OUTS '+state.outs,525,169);c.font='400 10px BallparkPixel';c.fillStyle='#c6c69e';c.fillText(state.phase==='finished'?'FINAL':'AT BAT '+(state.phase==='welcome'?0:state.index+1)+' / 5',480,184);
+const spriteTime=options.time??performance.now();
+atlasPlayer('defenderIdle',252,320,38,spriteTime);
+atlasPlayer('defenderIdle',707,321,38,spriteTime,false,3);
+atlasPlayer('defenderIdle',480,280,32,spriteTime,false,5);
+const pitching=state.phase==='animating'&&!reducedMotion();
+const pitchTime=pitching?options.time??0:0;
+const reaction=pitching?pitcherReaction(state.history.at(-1)?.score,pitchTime):null;
+atlasPlayer(reaction?.clip??'pitcherDelivery',480,381,69,reaction?.time??pitchTime);
 const runners=movers||state.bases.flatMap((on,i)=>on?[{x:basePoints[i+1][0],y:basePoints[i+1][1]-8}]:[]);
 for(const r of [...runners,...(options.actors||[])].sort((a,b)=>a.y-b.y)){c.fillStyle='#14352455';c.beginPath();c.ellipse(r.x,r.y+1,9,3,0,0,Math.PI*2);c.fill();runningPlayer(r,options.time??performance.now());}
-if(!options.hideBatter&&['question','scoring','submit-error','animating'].includes(state.phase)){if(pose<1)atlasPlayer('batterIdle',422,507,125,options.time??performance.now());else atlasPlayer('batterSwingClip',422,507,125,Math.max(0,(options.time??0)-300));}
+if(!options.hideBatter&&['question','scoring','submit-error','animating'].includes(state.phase)){if(pose<1)atlasPlayer('batterIdle',422,507,125);else atlasPlayer('batterSwingClip',422,507,125,(options.time??0)-MOTION.swingStart);}
 
-if(ball){c.fillStyle='#fff9dc';c.beginPath();c.arc(ball.x,ball.y,ball.size||3,0,Math.PI*2);c.fill();c.fillStyle='#ae4434';c.fillRect(Math.round(ball.x),Math.round(ball.y-1),1,2);}}
+if(ball)drawBaseball(ball);
+}
+function drawBaseball({x,y,size,spin,groundY}){
+ if(groundY!==undefined){
+  c.fillStyle='rgba(18,33,22,.32)';c.beginPath();
+  c.ellipse(x,groundY+size,size*1.2,size*.45,0,0,Math.PI*2);c.fill();
+ }
+ c.save();c.translate(Math.round(x),Math.round(y));
+ c.fillStyle='#575044';c.beginPath();c.arc(0,0,size+.7,0,Math.PI*2);c.fill();
+ c.fillStyle='#fff7de';c.beginPath();c.arc(0,0,size,0,Math.PI*2);c.fill();
+ c.rotate(spin);c.strokeStyle='#b84438';c.lineWidth=.85;c.beginPath();
+ c.moveTo(-size*.48,-size*.66);c.quadraticCurveTo(size*.32,0,-size*.48,size*.66);
+ c.moveTo(size*.4,-size*.66);c.quadraticCurveTo(-size*.19,0,size*.4,size*.66);
+ c.stroke();c.restore();
+}
 // Sample rounded corners once, then traverse by actual distance at a shared speed.
 const routeCache=new Map();
 function runnerRoute(start,steps,batter=false){
@@ -312,12 +368,12 @@ function routePoint(start,steps,t,batter=false){
  const u=Math.min(1,(distance-seg.offset)/seg.size),{a,b}=seg;
  return {x:a[0]+(b[0]-a[0])*u,y:a[1]+(b[1]-a[1])*u-8,dx:b[0]-a[0],dy:b[1]-a[1]};
 }
-const MOTION={contact:720,runStart:900,speed:.29,celebrate:720,exit:650,entry:650,outStart:1100};
+const MOTION={release:400,swingStart:520,contact:720,runStart:900,speed:.29,celebrate:720,exit:1200,entry:1350,outStart:1100};
 const hitSteps=s=>s===1000?4:s>=800?3:s>=600?2:s>=400?1:0;
 function baseRunners(bases){return bases.flatMap((on,i)=>on?[{x:basePoints[i+1][0],y:basePoints[i+1][1]-8,id:i+1}]:[]);}
 function walkActor(id,from,to,t,clip='playerWalk'){
  const u=Math.max(0,Math.min(1,t));
- return {id,x:from[0]+(to[0]-from[0])*u,y:from[1]+(to[1]-from[1])*u,dx:to[0]-from[0],dy:to[1]-from[1],mode:'walk',clip,clipTime:u*MOTION.exit};
+ return {id,x:from[0]+(to[0]-from[0])*u,y:from[1]+(to[1]-from[1])*u,dx:to[0]-from[0],dy:to[1]-from[1],mode:'walk',clip,clipTime:u*(clip==='batterWalk'?MOTION.entry:MOTION.exit)};
 }
 function scoringActor(id,elapsed){
  if(elapsed<MOTION.celebrate)return {id,x:480,y:480,mode:'celebrate',clipTime:elapsed};
@@ -333,18 +389,60 @@ function playDuration(score,previousBases){
  }
  return end;
 }
-function playScene(score,previousBases,elapsed,cleared=false){
+const CONTACT_POINT={x:474,y:445};
+const HIT_LANES=[-1,.5,0,1,-.5];
+const BALL_PATHS=[
+ {spread:105,depth:72,arc:10,flight:250,roll:700},
+ {spread:180,depth:120,arc:26,flight:430,roll:1050},
+ {spread:240,depth:166,arc:55,flight:620,roll:1050},
+ {spread:290,depth:205,arc:78,flight:740,roll:1150},
+ {spread:370,depth:315,arc:132,flight:970,roll:0}
+];
+function ballAfterSwing(score,atBat,elapsed){
+ const steps=hitSteps(score),path=BALL_PATHS[steps];
+ const lane=HIT_LANES[atBat%HIT_LANES.length];
+ const age=Math.max(0,elapsed);
+ if(steps===4&&age>=path.flight)return null;
+ if(score===0){
+  const u=Math.min(1,age/670),distance=1-(1-u)**2;
+  const y=CONTACT_POINT.y+83*distance;
+  return {x:CONTACT_POINT.x+14*distance,y,size:3.8,spin:distance*12,groundY:y};
+ }
+ const flight=Math.min(1,age/path.flight);
+ const roll=path.roll?Math.min(1,Math.max(0,(age-path.flight)/path.roll)):0;
+ const rollDistance=1-(1-roll)**2;
+ const distance=flight+(steps===4?0:.24*rollDistance);
+ const x=CONTACT_POINT.x+lane*path.spread*distance;
+ const groundY=CONTACT_POINT.y-path.depth*distance;
+ const bounce=roll<.2?Math.sin(roll/.2*Math.PI)*(steps?5:2):0;
+ const y=groundY-path.arc*4*flight*(1-flight)-bounce;
+ return {x,y,size:Math.max(2,4-distance*1.35),spin:distance*25,groundY};
+}
+const PITCHER_REACTIONS=['pitcherCheer','pitcherSingle','pitcherDouble','pitcherTriple','pitcherCry'];
+function pitcherReaction(score,elapsed){
+ if(score===undefined)return null;
+ const steps=hitSteps(score);
+ const start=MOTION.contact+(steps?BALL_PATHS[steps].flight:240);
+ return elapsed<start?null:{clip:PITCHER_REACTIONS[steps],time:elapsed-start};
+}
+function previousPlayBall(){
+ if(!['reveal','finished','loading'].includes(state.phase))return null;
+ const atBat=state.history.length-1,last=state.history[atBat];
+ return last?ballAfterSwing(last.score,atBat,Infinity):null;
+}
+function playScene(score,previousBases,elapsed,cleared=false,atBat=0){
  const steps=hitSteps(score),scene={ball:null,pose:0,runners:baseRunners(previousBases),hideBatter:false};
  if(elapsed<MOTION.contact){
-  scene.pose=elapsed<300?0:1;
-  const u=Math.max(0,(elapsed-300)/(MOTION.contact-300));
-  if(elapsed>300)scene.ball={x:480-9*u,y:332+143*u-9*Math.sin(u*Math.PI),size:2+2*u};
+  scene.pose=elapsed<MOTION.swingStart?0:1;
+  if(elapsed>=MOTION.release){
+   const u=(elapsed-MOTION.release)/(MOTION.contact-MOTION.release);
+   scene.ball={x:462+(CONTACT_POINT.x-462)*u,y:335+(CONTACT_POINT.y-335)*u-9*Math.sin(u*Math.PI),size:2+2*u,spin:u*17};
+  }
   return scene;
  }
  scene.pose=elapsed<MOTION.contact+130?2:3;
- const flight=Math.min(1,(elapsed-MOTION.contact)/900);
+ scene.ball=ballAfterSwing(score,atBat,elapsed-MOTION.contact);
  if(!steps){
-  if(flight<1)scene.ball={x:471+55*flight,y:475+55*flight,size:4};
   if(elapsed>=MOTION.outStart){
    scene.hideBatter=true;
    const progress=(elapsed-MOTION.outStart)/MOTION.exit;
@@ -353,8 +451,6 @@ function playScene(score,previousBases,elapsed,cleared=false){
   }
   return scene;
  }
- const end=steps===4?{x:650,y:95}:steps===3?{x:790,y:275}:steps===2?{x:685,y:302}:{x:595,y:342};
- if(flight<1)scene.ball={x:471+(end.x-471)*flight,y:475+(end.y-475)*flight-110*Math.sin(Math.PI*flight),size:4-flight*2};
  if(elapsed<MOTION.runStart)return scene;
  scene.hideBatter=true;scene.runners=[];
  const runTime=elapsed-MOTION.runStart;
@@ -372,7 +468,7 @@ function walkUp(done){
  if(reducedMotion()){done();return;}
  const start=performance.now();
  function frame(now){
-  const progress=Math.min(1,(now-start)/MOTION.entry);
+  const progress=Math.min(1,(now-start)*1.35/MOTION.entry);
   draw(null,0,null,{hideBatter:true,time:now,actors:[walkActor(0,[-100,555],[422,507],progress,'batterWalk')]});
   if(progress<1)requestAnimationFrame(frame);else done();
  }
@@ -381,9 +477,10 @@ function walkUp(done){
 function animate(score,previousBases,cleared=false){
  const reduced=reducedMotion(),duration=reduced?90:playDuration(score,previousBases),startTime=performance.now();beginCrowdReaction(score,startTime);
  function frame(now){
-  const elapsed=Math.min(duration,now-startTime);
-  const scene=reduced?{ball:null,pose:0,runners:baseRunners(state.bases),hideBatter:true}:playScene(score,previousBases,elapsed,cleared);
-  if(elapsed>MOTION.contact+200||reduced)$('#play-call').textContent=result(score).toUpperCase()+'!';
+  const elapsed=Math.min(duration,(now-startTime)*(reduced?1:1.5));
+  const scene=reduced?{ball:null,pose:0,runners:baseRunners(state.bases),hideBatter:true}:playScene(score,previousBases,elapsed,cleared,state.index);
+  const call=$('#play-call');
+  if(!call.textContent&&(elapsed>MOTION.contact+200||reduced))call.textContent=result(score).toUpperCase()+'!';
   draw(scene.ball,scene.pose,scene.runners,{hideBatter:scene.hideBatter,time:elapsed});
   if(elapsed<duration)requestAnimationFrame(frame);else{state.phase='reveal';save();render();}
  }
@@ -392,7 +489,7 @@ function animate(score,previousBases,cleared=false){
 // Keep ambient idle clips alive without repainting over play/entrance animations.
 let lastAmbientFrame=-Infinity;
 function ambientFrame(now){
- if(artReady&&!document.hidden&&!reducedMotion()&&!['animating','entering'].includes(state.phase)&&now-lastAmbientFrame>=1000/30){draw(null,0,null,{time:now});lastAmbientFrame=now;}
+ if(artReady&&!document.hidden&&!reducedMotion()&&!['animating','entering'].includes(state.phase)&&now-lastAmbientFrame>=1000/30){draw(previousPlayBall(),0,null,{time:now});lastAmbientFrame=now;}
  requestAnimationFrame(ambientFrame);
 }
 render();requestAnimationFrame(ambientFrame);bootstrap();

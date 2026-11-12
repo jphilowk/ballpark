@@ -69,12 +69,23 @@ input::placeholder{font:400 23px BallparkPixel,monospace;font-variant-numeric:no
 .reveal summary{cursor:pointer;display:inline-flex;align-items:center;min-height:44px;text-decoration:underline;text-underline-offset:4px;padding:4px 8px}
 .reveal p{font-size:17px;line-height:1.5;margin:12px 0 8px}
 .reveal a{color:var(--cream)}
-.final{text-align:center;width:min(440px,calc(100% - 40px))}
-.final h1{font:700 48px/1.1 ui-monospace,"SFMono-Regular",Consolas,monospace;font-variant-numeric:tabular-nums;margin:4px 0 14px;color:var(--gold)}
-.final h1 small{font-size:22px;color:var(--muted)}
-.finish-runs{font-size:20px}
-.finish-hits{font-size:17px;color:var(--muted);margin-top:20px}
-#share-status{flex-basis:100%;white-space:pre-wrap;text-align:center;font-size:16px}
+.prompt-card.final{width:min(470px,calc(100% - 30px));max-height:calc(100% - 155px);padding:18px 22px;text-align:center;overflow:auto;overscroll-behavior:contain}
+.final h2{font-size:20px;color:var(--muted)}
+.box-total{font-size:clamp(32px,5vw,46px);font-weight:700;font-variant-numeric:tabular-nums;line-height:1.05;color:var(--gold);margin-top:4px}
+.box-total small{font-size:19px;color:var(--muted)}
+.finish-runs{font-size:16px}
+.box-score{width:100%;margin:10px 0;border-collapse:collapse;font-size:16px;text-align:left}
+.box-score th,.box-score td{padding:3px 4px;border-bottom:1px solid #c3d2ad40}
+.box-score thead{color:var(--muted)}
+.box-score :is(th,td):last-child{text-align:right;font-variant-numeric:tabular-nums}
+.box-actions{display:flex;justify-content:center;gap:8px}
+.box-actions button{min-width:0;min-height:44px;padding:6px 12px;font-size:17px}
+#share-status{font-size:15px}
+#share-text:not([hidden]){display:block;width:100%;min-height:75px;margin-top:6px}
+@media(max-width:640px){
+ body[data-phase="finished"] .question-area{padding-bottom:max(12px,env(safe-area-inset-bottom,0px))}
+ .prompt-card.final{width:100%;max-height:100%}
+}
 #play-call{position:absolute;top:39%;left:0;right:0;text-align:center;font-size:clamp(35px,5vw,70px);font-weight:700;line-height:1.1;color:var(--gold);text-shadow:4px 4px var(--green);pointer-events:none}
 dialog{background:var(--green);color:var(--cream);border:2px solid var(--edge);box-shadow:0 8px #061b1480;max-width:540px;max-height:calc(100dvh - 48px);width:90vw;padding:28px;font-size:18px;line-height:1.5;overflow:auto}
 dialog::backdrop{background:#061911b8;animation:backdrop-in 140ms ease-out}
@@ -107,7 +118,7 @@ button:focus-visible,a:focus-visible,summary:focus-visible{outline:2px solid var
  input{font-size:23px;height:56px;padding:11px 12px 14px}input::placeholder{font-size:20px}
  .primary,.secondary{min-height:56px;padding:12px 17px;font-size:20px}
  .error{left:53px;top:66px;font-size:14px}.answers{gap:16px}.answers strong{font-size:32px}
- .answers small{font-size:13px}.reveal .sport{font-size:19px}.final h1{font-size:42px}
+ .answers small{font-size:13px}.reveal .sport{font-size:19px}
  .single{gap:8px}.single .primary,.single .secondary{min-width:0;flex:1}
  dialog{padding:22px;font-size:17px;max-height:calc(100dvh - env(safe-area-inset-top,0px) - env(safe-area-inset-bottom,0px) - 24px)}
 }
