@@ -24,12 +24,14 @@ viewport?.addEventListener('scroll',syncMobileViewport);
 window.addEventListener('resize',syncMobileViewport);
 document.addEventListener('focusin',syncMobileViewport);
 document.addEventListener('focusout',()=>requestAnimationFrame(syncMobileViewport));
-let date=chicagoDate(),key='ballpark-fullfield-v4-'+date,questions=shuffle(bank,date),daily=null,contentReady=false,contentError='';
-const initial=()=>({phase:'welcome',index:0,history:[],bases:[false,false,false],outs:0,runs:0,deadline:null,draft:'',token:null,questions:[],pendingGuess:null,pendingTimed:false});let state=initial(),saved=true;
+let date=chicagoDate(),key='ballpark-fullfield-v4-'+date,questions=shuffle(bank,date),daily=null,todayDaily=null,activeSession=false,dailyCheckPending=null,contentReady=false,contentError='';
+const ACTIVE_GAME_KEY='ballpark-active-daily-v1';
+const initial=()=>({phase:'welcome',index:0,history:[],bases:[false,false,false],outs:0,runs:0,deadline:null,draft:'',token:null,questions:[],pendingGuess:null,pendingTimed:false,submitError:''});let state=initial(),saved=true;
 const escapeHtml=value=>String(value??'').replace(/[&<>"']/g,char=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[char]));
+const RATE_LIMIT_MESSAGE='Too many requests right now. Wait a moment, then retry.';
 async function apiCall(path,body){
  const controller=new AbortController(),timeout=setTimeout(()=>controller.abort(),15000);
- try{const response=await fetch(path,{method:body?'POST':'GET',headers:body?{'Content-Type':'application/json'}:{},body:body?JSON.stringify(body):undefined,cache:'no-store',signal:controller.signal});const data=await response.json();if(!response.ok)throw Error(data.error||'Game unavailable');return data;}finally{clearTimeout(timeout);}
+ try{const response=await fetch(path,{method:body?'POST':'GET',headers:body?{'Content-Type':'application/json'}:{},body:body?JSON.stringify(body):undefined,cache:'no-store',signal:controller.signal});if(response.status===429)throw Object.assign(new Error(RATE_LIMIT_MESSAGE),{status:429});const data=await response.json();if(!response.ok)throw Error(data.error||'Game unavailable');return data;}finally{clearTimeout(timeout);}
 }
 function restore(){
  try{const old=JSON.parse(localStorage.getItem(key));if(old&&Array.isArray(old.history)&&old.index>=0&&old.index<5&&(!daily||old.token))state={...initial(),...old};}catch{saved=false;}
@@ -38,17 +40,51 @@ function restore(){
  if(['entering','loading'].includes(state.phase))state.phase='welcome';
  if(state.phase==='scoring')state.phase='submit-error';
 }
+function tokenExpiry(token){
+ try{const payload=JSON.parse(atob(token.split('.')[0].replaceAll('-','+').replaceAll('_','/')));return Number.isFinite(payload.exp)?payload.exp:0;}catch{return 0;}
+}
+function savedActiveGame(){
+ try{
+  const game=JSON.parse(localStorage.getItem(ACTIVE_GAME_KEY));
+  if(!game||game.key!==`ballpark-daily-v1-${game.puzzleId}`||typeof game.date!=='string')return null;
+  const old=JSON.parse(localStorage.getItem(game.key));
+  if(!old||old.phase==='finished'||!old.token||tokenExpiry(old.token)<=Date.now()){localStorage.removeItem(ACTIVE_GAME_KEY);return null;}
+  return game;
+ }catch{return null;}
+}
+function useDaily(game,active=false){
+ daily=game;date=game.date;key='ballpark-daily-v1-'+game.puzzleId;state=initial();activeSession=active;
+ restore();
+ if(!active&&state.phase!=='welcome'&&state.phase!=='finished'){activeSession=true;save();}
+ contentReady=true;contentError='';render();
+}
 async function bootstrap(){
  contentReady=false;contentError='';
  try{
   if(location.protocol!=='file:'){
-   daily=await apiCall('/api/daily');date=daily.date;key='ballpark-daily-v1-'+daily.puzzleId;
+   todayDaily=await apiCall('/api/daily');
+   const active=savedActiveGame();useDaily(active||todayDaily,Boolean(active));
+  }else{
+   restore();contentReady=true;render();
   }
-  restore();contentReady=true;render();
- }catch{contentError='Today’s game couldn’t load. Please try again.';render();}
+ }catch(error){contentError=error.status===429?RATE_LIMIT_MESSAGE:'Today’s game couldn’t load. Please try again.';render();}
+}
+async function checkDaily(){
+ if(location.protocol==='file:'||!todayDaily||chicagoDate()===todayDaily.date&&(!activeSession||tokenExpiry(state.token)>Date.now()))return;
+ if(dailyCheckPending)return dailyCheckPending;
+ dailyCheckPending=(async()=>{
+  try{
+   const fresh=await apiCall('/api/daily');todayDaily=fresh;
+   if(activeSession&&tokenExpiry(state.token)>Date.now())return;
+   if(activeSession){activeSession=false;try{localStorage.removeItem(ACTIVE_GAME_KEY);}catch{saved=false;}}
+   if(state.phase==='welcome'||state.phase!=='finished'&&daily.puzzleId!==fresh.puzzleId)useDaily(fresh);
+   else if(state.phase==='finished')render();
+  }catch{}
+ })();
+ try{await dailyCheckPending;}finally{dailyCheckPending=null;}
 }
 function refreshStartButton(){const button=$('#start');if(!button)return;button.disabled=!artReady||(!contentReady&&!contentError);button.textContent=contentError?'Try again':!contentReady?'Loading…':artReady?'Play':'Loading…';}
-function save(){try{localStorage.setItem(key,JSON.stringify(state));}catch{saved=false;}}
+function save(){try{localStorage.setItem(key,JSON.stringify(state));if(daily){if(activeSession)localStorage.setItem(ACTIVE_GAME_KEY,JSON.stringify({key,date,puzzleId:daily.puzzleId,mode:daily.mode}));else localStorage.removeItem(ACTIVE_GAME_KEY);}}catch{saved=false;}}
 const total=()=>state.history.reduce((n,h)=>n+h.score,0);
 const abbr=r=>({'Home run':'HR',Triple:'3B',Double:'2B',Single:'1B',Out:'OUT',Strikeout:'K'}[r]);
 const UI_FADE={enter:140,leave:100};
@@ -83,11 +119,18 @@ function hud(){$('#rounds').dataset.label=state.phase==='welcome'?'5 AT-BATS':st
 async function start(){
  if(!artReady||['entering','loading'].includes(state.phase))return;
  if(!contentReady)return bootstrap();
+ if(daily&&activeSession&&tokenExpiry(state.token)<=Date.now()){
+  await checkDaily();
+  if(activeSession){contentError='Your previous game expired. Today’s game couldn’t load. Try again.';render();}
+  return;
+ }
+ if(daily&&!activeSession&&chicagoDate()!==date){await checkDaily();if(chicagoDate()!==date){contentError='Today’s game couldn’t load. Please try again.';render();return;}}
  contentError='';state.deadline=null;state.draft='';
+ if(daily)activeSession=true;
  if(daily&&!questions[state.index]){
   state.phase='loading';save();render();
   try{questions[state.index]=await apiCall('/api/question',{token:state.token});state.questions[state.index]=questions[state.index];}
-  catch{state.phase='welcome';contentError='This at-bat couldn’t load. Try again.';save();render();return;}
+  catch(error){state.phase='welcome';contentError=error.status===429?RATE_LIMIT_MESSAGE:'This at-bat couldn’t load. Try again.';save();render();return;}
  }
  state.phase='entering';save();render();
  walkUp(()=>{state.phase='question';state.deadline=Date.now()+20000;save();render();});
@@ -95,10 +138,10 @@ async function start(){
 function render(){fadeOutPanels();document.body.dataset.phase=state.phase;hud();$('#play-call').textContent='';
 if(state.phase==='welcome'){panel.innerHTML=`<div class="prompt-card welcome"><h1>Ballparkle</h1><p class="welcome-copy">${escapeHtml(contentError||(!contentReady?"Loading today’s game…":daily?.mode==='daily'?"Five sports. Five at-bats.":"Practice · Five sports. Five at-bats."))}</p><button class="primary" id="start">Play</button></div>`;refreshStartButton();$('#start').onclick=contentError&&!contentReady?bootstrap:start;}
 else if(state.phase==='question'){const q=questions[state.index];panel.innerHTML=`<div class="prompt-card"><div class="sport">${escapeHtml(q.sport)} · AT BAT ${state.index+1} OF 5</div><h2>${escapeHtml(q.q)}</h2></div><form id="guess-form" class="answer-dock"><span class="timer" role="timer" aria-label="Seconds remaining">20</span><div class="input-wrap"><input id="guess" type="text" inputmode="decimal" autocomplete="off" aria-label="Your guess in ${escapeHtml(q.unit)}" placeholder="Number" aria-describedby="error"/><div class="track"><div></div></div></div><button class="primary" type="submit">Swing</button><div class="error" id="error" role="alert"></div></form>`;$('#guess').value=state.draft;$('#guess').oninput=e=>{state.draft=e.target.value;$('#error').textContent='';save();};$('#guess-form').onsubmit=e=>{e.preventDefault();submit(false);};if(!matchMedia('(pointer:coarse)').matches)$('#guess').focus({preventScroll:true});tick();}
-else if(state.phase==='reveal'){const last=state.history.at(-1),q=questions[state.index];panel.innerHTML=`<div class="prompt-card reveal"><div class="sport">${result(last.score).toUpperCase()} · +${last.score}</div><div class="answers"><div><small>YOUR GUESS</small><strong>${last.guess===null?'—':last.guess.toLocaleString()}</strong></div><div><small>ANSWER</small><strong>${q.answer.toLocaleString()}</strong></div></div><details><summary>Details</summary><p>${escapeHtml(q.fact)}</p><a href="${escapeHtml(q.url)}" target="_blank" rel="noopener">${escapeHtml(q.source)}</a></details></div><div class="answer-dock single"><button class="primary" id="next">${state.index===4?'Results':'Next'}</button></div>`;$('#next').onclick=()=>{if(state.index===4){state.phase='finished';save();render();}else{state.index++;start();}};}
+else if(state.phase==='reveal'){const last=state.history.at(-1),q=questions[state.index];panel.innerHTML=`<div class="prompt-card reveal"><div class="sport">${result(last.score).toUpperCase()} · +${last.score}</div><div class="answers"><div><small>YOUR GUESS</small><strong>${last.guess===null?'—':last.guess.toLocaleString()}</strong></div><div><small>ANSWER</small><strong>${q.answer.toLocaleString()}</strong></div></div><details><summary>Details</summary><p>${escapeHtml(q.fact)}</p><a href="${escapeHtml(q.url)}" target="_blank" rel="noopener">${escapeHtml(q.source)}</a></details></div><div class="answer-dock single"><button class="primary" id="next">${state.index===4?'Results':'Next'}</button></div>`;$('#next').onclick=()=>{if(state.index===4){state.phase='finished';activeSession=false;save();render();checkDaily();}else{state.index++;start();}};}
 else if(['animating','entering'].includes(state.phase)){panel.innerHTML='';}
 else if(['loading','scoring'].includes(state.phase)){panel.innerHTML=`<div class="prompt-card welcome"><p class="welcome-copy">${state.phase==='loading'?'Getting the next at-bat…':'Saving your swing…'}</p></div>`;}
-else if(state.phase==='submit-error'){panel.innerHTML=`<div class="prompt-card welcome"><p class="welcome-copy">That swing couldn’t be saved. Try again.</p><button class="primary" id="retry-swing">Retry</button></div>`;$('#retry-swing').onclick=()=>submit(state.pendingTimed);}
+else if(state.phase==='submit-error'){panel.innerHTML=`<div class="prompt-card welcome"><p class="welcome-copy">${escapeHtml(state.submitError||'Your guess is saved. That swing couldn’t be scored. Try again.')}</p><button class="primary" id="retry-swing">Retry</button></div>`;$('#retry-swing').onclick=()=>submit(state.pendingTimed);}
 else renderBoxScore();
 syncMobileViewport();fadeInPanels();}
 
@@ -112,7 +155,7 @@ function renderBoxScore(){
    <thead><tr><th scope="col">At bat</th><th scope="col">Result</th><th scope="col">Points</th></tr></thead>
    <tbody>${rows}</tbody>
   </table>
-  <div class="box-actions"><button class="primary" id="share">Copy result</button>${daily?.mode==='daily'?'':'<button class="secondary" id="again">Play again</button>'}</div>
+  <div class="box-actions"><button class="primary" id="share">Copy result</button>${todayDaily&&todayDaily.puzzleId!==daily?.puzzleId?'<button class="secondary" id="today">Play today’s puzzle</button>':daily?.mode==='daily'?'':'<button class="secondary" id="again">Play again</button>'}</div>
   <div id="share-status" role="status"></div>
   <textarea id="share-text" aria-label="Result to copy" readonly hidden></textarea>
  </div>`;
@@ -124,6 +167,8 @@ function renderBoxScore(){
  };
  const again=$('#again');
  if(again)again.onclick=()=>{state=initial();if(daily){state.token=daily.token;questions=Array(5).fill(null);}save();render();};
+ const today=$('#today');
+ if(today)today.onclick=()=>useDaily(todayDaily);
 }
 
 function parse(raw){const input=raw.trim();if(!/^(?:(?:\d+|\d{1,3}(?:,\d{3})+)(?:\.\d*)?|\.\d+)$/.test(input))return null;const n=Number(input.replaceAll(',',''));return Number.isFinite(n)?n:null;}
@@ -144,13 +189,13 @@ async function submit(timed){
    $('#error').textContent='Saving your swing…';
   }else render();
   try{const response=await apiCall('/api/score',{token:state.token,guess,timed});score=response.score;Object.assign(questions[state.index],{answer:response.answer,fact:response.fact,source:response.source,url:response.url});state.questions[state.index]=questions[state.index];state.token=response.token;}
-  catch{state.phase='submit-error';save();render();return;}
+  catch(error){state.phase='submit-error';state.submitError=error.status===429?'Your guess is saved. '+RATE_LIMIT_MESSAGE:'Your guess is saved. That swing couldn’t be scored. Try again.';save();render();return;}
  }else score=points(guess,questions[state.index].answer,questions[state.index].sport);
  const play=advance(state.bases,state.outs,score);
- state.history.push({guess,score,timed,runs:play.runs,cleared:play.cleared});state.bases=play.bases;state.outs=play.outs;state.runs+=play.runs;state.phase='animating';state.pendingGuess=null;save();$('#guess')?.blur();render();animate(score,previousBases,play.cleared);
+ state.history.push({guess,score,timed,runs:play.runs,cleared:play.cleared});state.bases=play.bases;state.outs=play.outs;state.runs+=play.runs;state.phase='animating';state.pendingGuess=null;state.submitError='';save();$('#guess')?.blur();render();animate(score,previousBases,play.cleared);
 }
 function tick(){if(state.phase!=='question')return;const left=Math.max(0,state.deadline-Date.now());if(left===0){submit(true);return;}const timer=$('.timer'),track=$('.track');if(timer){timer.textContent=Math.ceil(left/1000);timer.classList.toggle('urgent',left<=5000);track.classList.toggle('urgent',left<=5000);track.firstElementChild.style.width=left/200+'%';}}
-setInterval(tick,100);document.addEventListener('visibilitychange',tick);$('#help').onclick=openHelp;$('#close-help').onclick=closeHelp;$('#rules').oncancel=e=>{e.preventDefault();closeHelp();};
+setInterval(tick,100);setInterval(checkDaily,60000);document.addEventListener('visibilitychange',()=>{tick();if(!document.hidden)checkDaily();});window.addEventListener('focus',checkDaily);$('#help').onclick=openHelp;$('#close-help').onclick=closeHelp;$('#rules').oncancel=e=>{e.preventDefault();closeHelp();};
 const canvas=$('#field'),c=canvas.getContext('2d');canvas.width=960;canvas.height=540;c.imageSmoothingEnabled=false;
 const portraitView=matchMedia('(max-width: 650px) and (orientation: portrait)');
 portraitView.addEventListener('change',()=>{
