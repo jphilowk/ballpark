@@ -19,6 +19,10 @@ header{position:absolute;z-index:10;left:24px;right:24px;top:calc(18px + env(saf
 .wordmark{font-size:27px;font-weight:700;line-height:1;color:var(--cream);text-decoration:none;text-shadow:2px 2px var(--green);pointer-events:auto}
 .wordmark span{font-size:16px;color:var(--gold);margin-left:5px}
 .icon{pointer-events:auto;font-size:21px;font-weight:700;background:var(--green);color:var(--cream);border:2px solid var(--edge);width:44px;height:44px;cursor:pointer}
+.header-actions{display:flex;gap:8px}
+#sound{display:grid;place-items:center}
+#sound .sound-off,#sound[aria-pressed="true"] .sound-waves{display:none}
+#sound[aria-pressed="true"] .sound-off{display:block}
 .edition,footer,.field-label{display:none}
 .scoreboard{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%);white-space:nowrap}
 .rounds{position:absolute;z-index:5;top:19px;left:50%;transform:translateX(-50%);display:flex;gap:6px}
@@ -107,6 +111,10 @@ button:focus-visible,a:focus-visible,summary:focus-visible{outline:2px solid var
 }
 @media(max-width:650px){
  header{left:14px;right:14px;top:calc(14px + env(safe-area-inset-top,0px))}.wordmark{font-size:24px}
+ .header-actions{gap:0}
+ .header-actions .icon{position:relative;display:grid;place-items:center;background:none;border:0;padding:0;font-size:17px;isolation:isolate}
+ .header-actions .icon::before{content:"";position:absolute;inset:7px;z-index:-1;background:var(--green);border:1px solid var(--edge)}
+ #sound svg{width:15px;height:15px}
  .rounds{top:calc(65px + env(safe-area-inset-top,0px))}.rounds:after{top:31px}.round{width:23px;height:22px}
  .question-area{display:flex;align-items:center;justify-content:center;padding:calc(115px + env(safe-area-inset-top,0px)) 15px 135px}
  .prompt-card{position:relative;top:auto;left:auto;transform:none;width:100%;max-height:100%;padding:22px 24px;overflow-y:auto;overscroll-behavior:contain}

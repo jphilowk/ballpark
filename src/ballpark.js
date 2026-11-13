@@ -1,6 +1,7 @@
 const ASSETS={"skyClouds":"./assets/skyClouds.png","skyMask":"./assets/skyMask.png","skyBirds":"./assets/skyBirds.png","crowdCheer":"./assets/crowdCheer.png","batterIdle":"./assets/batterIdle.png","batterSwingClip":"./assets/batterSwingClip.png","runnerIdle":"./assets/runnerIdle.png","runnerCelebrate":"./assets/runnerCelebrate.png","batterWalk":"./assets/batterWalk.png","playerWalk":"./assets/playerWalk.png","runnerFront":"./assets/runnerFront.png","runnerBack":"./assets/runnerBack.png","stadium":"./assets/stadiumAmbient.png","pitcherDelivery":"./assets/pitcherDelivery.png","pitcherCheer":"./assets/pitcherCheer.png","pitcherCry":"./assets/pitcherCry.png","pitcherSingle":"./assets/pitcherSingle.png","pitcherDouble":"./assets/pitcherDouble.png","pitcherTriple":"./assets/pitcherTriple.png","defenderIdle":"./assets/defenderIdle.png"};
 import {points} from '../lib/scoring.mjs';
 ASSETS.stadiumPortrait='./assets/stadiumPortrait.png';
+ASSETS.portraitSkyMask='./assets/portraitSkyMask.png';
 function result(score){return score===1000?'Home run':score>=800?'Triple':score>=600?'Double':score>=400?'Single':score>0?'Out':'Strikeout';}
 function advance(bases,outs,score){const label=result(score);const steps=label==='Home run'?4:label==='Triple'?3:label==='Double'?2:label==='Single'?1:0;let runs=0;let next=[false,false,false];if(!steps){outs++;return {bases:outs===3?next:[...bases],outs:outs===3?0:outs,runs:0,cleared:outs===3};}for(let i=0;i<3;i++)if(bases[i]){if(i+steps>=3)runs++;else next[i+steps]=true;}if(steps===4)runs++;else next[steps-1]=true;return {bases:next,outs,runs,cleared:false};}
 function chicagoDate(date=new Date()){return new Intl.DateTimeFormat('en-CA',{timeZone:'America/Chicago',year:'numeric',month:'2-digit',day:'2-digit'}).format(date);}
@@ -8,6 +9,114 @@ function shuffle(items,seed){let n=[...seed].reduce((a,c)=>Math.imul(a,31)+c.cha
 
 const bank=[{"sport": "NFL", "q": "How many regular-season punt-return touchdowns did Devin Hester score in his NFL career?", "answer": 14, "unit": "punt-return touchdowns", "fact": "Hester finished with 14 punt-return touchdowns in the regular season.", "source": "Pro Football Hall of Fame", "url": "https://www.profootballhof.com/players/devin-hester"}, {"sport": "NBA", "q": "How many points did Kobe Bryant score against Toronto on January 22, 2006?", "answer": 81, "unit": "points", "fact": "Bryant scored 81 points in the Lakers’ win over Toronto.", "source": "NBA", "url": "https://jr.nba.com/the-81-point-game/"}, {"sport": "MLB", "q": "How many stolen bases did Rickey Henderson record in his MLB regular-season career?", "answer": 1406, "unit": "stolen bases", "fact": "Henderson finished his major league career with 1,406 stolen bases.", "source": "Baseball Hall of Fame", "url": "https://baseballhall.org/discover/henderson-remembered-as-electrifying-legend-of-the-game"}, {"sport": "CBB", "q": "How many NCAA men’s basketball championships did Duke win under Mike Krzyzewski?", "answer": 5, "unit": "championships", "fact": "Duke won five NCAA championships under Coach K.", "source": "Duke Athletics", "url": "https://goduke.com/honors/hall-of-fame/mike-krzyzewski/26"}, {"sport": "CFB", "q": "How many touchdown passes did Joe Burrow throw in LSU’s 2019 season, including the postseason?", "answer": 60, "unit": "touchdown passes", "fact": "Burrow threw 60 touchdown passes during LSU’s unbeaten 2019 championship season.", "source": "LSU Athletics", "url": "https://lsusports.net/sports/fb/roster/season/2019/player/joe-burrow"}];
 const $=s=>document.querySelector(s),panel=$('#panel');
+const soundButton=$('#sound'),soundKey='ballpark-sound-muted';
+let muted=false,audioContext,soundOutput,noiseBuffer,unlockPending;
+try{muted=localStorage.getItem(soundKey)==='1';}catch{}
+function updateSoundButton(){
+ soundButton.setAttribute('aria-pressed',String(muted));
+}
+function unlockSound(){
+ const Audio=window.AudioContext||window.webkitAudioContext;
+ if(muted||!Audio)return;
+ try{
+  if(!audioContext){
+   audioContext=new Audio();
+   soundOutput=audioContext.createGain();
+   soundOutput.connect(audioContext.destination);
+   noiseBuffer=audioContext.createBuffer(1,Math.ceil(audioContext.sampleRate*.25),audioContext.sampleRate);
+   const samples=noiseBuffer.getChannelData(0);
+   for(let i=0;i<samples.length;i++)samples[i]=Math.random()*2-1;
+  }
+  if(audioContext.state==='running')return;
+  if(!unlockPending){
+   unlockPending=audioContext.resume().catch(()=>{}).finally(()=>{unlockPending=null;});
+  }
+  return unlockPending;
+ }catch{}
+}
+
+const CONTROL_CUES={
+ start:[460,700],retry:[415,590],swing:[290,125],next:[630,810],
+ results:[700,930],share:[780,1170],again:[370,560],today:[520,870],
+ help:[510,650],close:[510,320],details:[585,460],link:[850,690],
+ mute:[570,320],unmute:[360,650]
+};
+function playControlSound(cue){
+ const ready=unlockSound();
+ const play=()=>{
+  if(muted||audioContext?.state!=='running')return;
+  const [pitch,end]=CONTROL_CUES[cue];
+  soundTone(audioContext.currentTime,.055,.08,pitch,end,'sine');
+ };
+ if(ready)void ready.then(play);else play();
+}
+
+updateSoundButton();
+soundButton.onclick=()=>{
+ if(!muted)playControlSound('mute');
+ muted=!muted;
+ if(soundOutput){
+  const now=audioContext.currentTime;
+  soundOutput.gain.cancelScheduledValues(now);
+  soundOutput.gain.setValueAtTime(1,now);
+  if(muted)soundOutput.gain.linearRampToValueAtTime(0,now+.055);
+ }
+ try{localStorage.setItem(soundKey,muted?'1':'0');}catch{}
+ updateSoundButton();
+ if(!muted)playControlSound('unmute');
+};
+document.addEventListener('click',event=>{
+ const control=event.target.closest('button,summary,a');
+ if(!control||control.disabled||control===soundButton)return;
+ const cue=control.dataset.sound||'link';
+ playControlSound(cue);
+},true);
+
+function soundEnvelope(source,duration,volume,when,attack,filter){
+ const gain=audioContext.createGain();
+ gain.gain.setValueAtTime(.001,when);
+ gain.gain.linearRampToValueAtTime(volume,when+attack);
+ gain.gain.exponentialRampToValueAtTime(.001,when+duration);
+ source.connect(filter||gain);
+ if(filter)filter.connect(gain);
+ gain.connect(soundOutput);
+ source.start(when);
+ source.stop(when+duration);
+ source.onended=()=>{
+  source.disconnect();
+  if(filter)filter.disconnect();
+  gain.disconnect();
+ };
+}
+function soundNoise(when,duration,volume,frequency,attack=.008){
+ const source=audioContext.createBufferSource(),filter=audioContext.createBiquadFilter();
+ source.buffer=noiseBuffer;
+ filter.type='bandpass';
+ filter.frequency.value=frequency;
+ filter.Q.value=.7;
+ soundEnvelope(source,duration,volume,when,attack,filter);
+}
+function soundTone(when,duration,volume,frequency,endFrequency,type='triangle'){
+ const source=audioContext.createOscillator();
+ source.type=type;
+ source.frequency.setValueAtTime(frequency,when);
+ source.frequency.exponentialRampToValueAtTime(endFrequency,when+duration);
+ soundEnvelope(source,duration,volume,when,.005);
+}
+function playAtBatSound(score){
+ if(muted||audioContext?.state!=='running')return;
+ const now=audioContext.currentTime;
+ if(score===0){
+  soundNoise(now,.19,.12,1000,.045);
+  soundTone(now+.07,.13,.085,210,105);
+ }else{
+  soundNoise(now,.09,.34,2100);
+  soundTone(now,.12,.14,690,170);
+ }
+ if(score===1000){
+  [392,494,587,784].forEach((note,i)=>soundTone(now+.18+i*.095,.19,.027,note,note));
+ }
+}
 const viewport=window.visualViewport;
 let fullViewportHeight=Math.max(window.innerHeight,viewport?.height||0);
 function syncMobileViewport(){
@@ -118,6 +227,7 @@ function closeHelp(){
 function hud(){$('#rounds').dataset.label=state.phase==='welcome'?'5 AT-BATS':state.phase==='finished'?'FINAL':'AT BAT '+(state.index+1)+' OF 5';$('#score').textContent=String(total()).padStart(4,'0');$('#runs').textContent=state.runs;$('#outs').textContent=Array.from({length:3},(_,i)=>i<state.outs?'●':'○').join(' ');$('#atbat').textContent=state.phase==='welcome'?'— / 5':(state.index+1)+' / 5';$('#rounds').innerHTML=Array.from({length:5},(_,i)=>`<div class="round ${state.history[i]?'done':i===state.index&&state.phase!=='welcome'?'current':''}">${state.history[i]?abbr(result(state.history[i].score)):String(i+1)}</div>`).join('');draw();}
 async function start(){
  if(!artReady||['entering','loading'].includes(state.phase))return;
+ unlockSound();
  if(!contentReady)return bootstrap();
  if(daily&&activeSession&&tokenExpiry(state.token)<=Date.now()){
   await checkDaily();
@@ -136,12 +246,12 @@ async function start(){
  walkUp(()=>{state.phase='question';state.deadline=Date.now()+20000;save();render();});
 }
 function render(){fadeOutPanels();document.body.dataset.phase=state.phase;hud();$('#play-call').textContent='';
-if(state.phase==='welcome'){panel.innerHTML=`<div class="prompt-card welcome"><h1>Ballparkle</h1><p class="welcome-copy">${escapeHtml(contentError||(!contentReady?"Loading today’s game…":daily?.mode==='daily'?"Five sports. Five at-bats.":"Practice · Five sports. Five at-bats."))}</p><button class="primary" id="start">Play</button></div>`;refreshStartButton();$('#start').onclick=contentError&&!contentReady?bootstrap:start;}
-else if(state.phase==='question'){const q=questions[state.index];panel.innerHTML=`<div class="prompt-card"><div class="sport">${escapeHtml(q.sport)} · AT BAT ${state.index+1} OF 5</div><h2>${escapeHtml(q.q)}</h2></div><form id="guess-form" class="answer-dock"><span class="timer" role="timer" aria-label="Seconds remaining">20</span><div class="input-wrap"><input id="guess" type="text" inputmode="decimal" autocomplete="off" aria-label="Your guess in ${escapeHtml(q.unit)}" placeholder="Number" aria-describedby="error"/><div class="track"><div></div></div></div><button class="primary" type="submit">Swing</button><div class="error" id="error" role="alert"></div></form>`;$('#guess').value=state.draft;$('#guess').oninput=e=>{state.draft=e.target.value;$('#error').textContent='';save();};$('#guess-form').onsubmit=e=>{e.preventDefault();submit(false);};if(!matchMedia('(pointer:coarse)').matches)$('#guess').focus({preventScroll:true});tick();}
-else if(state.phase==='reveal'){const last=state.history.at(-1),q=questions[state.index];panel.innerHTML=`<div class="prompt-card reveal"><div class="sport">${result(last.score).toUpperCase()} · +${last.score}</div><div class="answers"><div><small>YOUR GUESS</small><strong>${last.guess===null?'—':last.guess.toLocaleString()}</strong></div><div><small>ANSWER</small><strong>${q.answer.toLocaleString()}</strong></div></div><details><summary>Details</summary><p>${escapeHtml(q.fact)}</p><a href="${escapeHtml(q.url)}" target="_blank" rel="noopener">${escapeHtml(q.source)}</a></details></div><div class="answer-dock single"><button class="primary" id="next">${state.index===4?'Results':'Next'}</button></div>`;$('#next').onclick=()=>{if(state.index===4){state.phase='finished';activeSession=false;save();render();checkDaily();}else{state.index++;start();}};}
+if(state.phase==='welcome'){panel.innerHTML=`<div class="prompt-card welcome"><h1>Ballparkle</h1><p class="welcome-copy">${escapeHtml(contentError||(!contentReady?"Loading today’s game…":daily?.mode==='daily'?"Five sports. Five at-bats.":"Practice · Five sports. Five at-bats."))}</p><button class="primary" id="start" data-sound="${contentError?'retry':'start'}">Play</button></div>`;refreshStartButton();$('#start').onclick=contentError&&!contentReady?bootstrap:start;}
+else if(state.phase==='question'){const q=questions[state.index];panel.innerHTML=`<div class="prompt-card"><div class="sport">${escapeHtml(q.sport)} · AT BAT ${state.index+1} OF 5</div><h2>${escapeHtml(q.q)}</h2></div><form id="guess-form" class="answer-dock"><span class="timer" role="timer" aria-label="Seconds remaining">20</span><div class="input-wrap"><input id="guess" type="text" inputmode="decimal" autocomplete="off" aria-label="Your guess in ${escapeHtml(q.unit)}" placeholder="Number" aria-describedby="error"/><div class="track"><div></div></div></div><button class="primary" type="submit" data-sound="swing">Swing</button><div class="error" id="error" role="alert"></div></form>`;$('#guess').value=state.draft;$('#guess').oninput=e=>{state.draft=e.target.value;$('#error').textContent='';save();};$('#guess-form').onsubmit=e=>{e.preventDefault();submit(false);};if(!matchMedia('(pointer:coarse)').matches)$('#guess').focus({preventScroll:true});tick();}
+else if(state.phase==='reveal'){const last=state.history.at(-1),q=questions[state.index];panel.innerHTML=`<div class="prompt-card reveal"><div class="sport">${result(last.score).toUpperCase()} · +${last.score}</div><div class="answers"><div><small>YOUR GUESS</small><strong>${last.guess===null?'—':last.guess.toLocaleString()}</strong></div><div><small>ANSWER</small><strong>${q.answer.toLocaleString()}</strong></div></div><details><summary data-sound="details">Details</summary><p>${escapeHtml(q.fact)}</p><a href="${escapeHtml(q.url)}" target="_blank" rel="noopener">${escapeHtml(q.source)}</a></details></div><div class="answer-dock single"><button class="primary" id="next" data-sound="${state.index===4?'results':'next'}">${state.index===4?'Results':'Next'}</button></div>`;$('#next').onclick=()=>{if(state.index===4){state.phase='finished';activeSession=false;save();render();checkDaily();}else{state.index++;start();}};}
 else if(['animating','entering'].includes(state.phase)){panel.innerHTML='';}
 else if(['loading','scoring'].includes(state.phase)){panel.innerHTML=`<div class="prompt-card welcome"><p class="welcome-copy">${state.phase==='loading'?'Getting the next at-bat…':'Saving your swing…'}</p></div>`;}
-else if(state.phase==='submit-error'){panel.innerHTML=`<div class="prompt-card welcome"><p class="welcome-copy">${escapeHtml(state.submitError||'Your guess is saved. That swing couldn’t be scored. Try again.')}</p><button class="primary" id="retry-swing">Retry</button></div>`;$('#retry-swing').onclick=()=>submit(state.pendingTimed);}
+else if(state.phase==='submit-error'){panel.innerHTML=`<div class="prompt-card welcome"><p class="welcome-copy">${escapeHtml(state.submitError||'Your guess is saved. That swing couldn’t be scored. Try again.')}</p><button class="primary" id="retry-swing" data-sound="retry">Retry</button></div>`;$('#retry-swing').onclick=()=>submit(state.pendingTimed);}
 else renderBoxScore();
 syncMobileViewport();fadeInPanels();}
 
@@ -155,7 +265,7 @@ function renderBoxScore(){
    <thead><tr><th scope="col">At bat</th><th scope="col">Result</th><th scope="col">Points</th></tr></thead>
    <tbody>${rows}</tbody>
   </table>
-  <div class="box-actions"><button class="primary" id="share">Copy result</button>${todayDaily&&todayDaily.puzzleId!==daily?.puzzleId?'<button class="secondary" id="today">Play today’s puzzle</button>':daily?.mode==='daily'?'':'<button class="secondary" id="again">Play again</button>'}</div>
+  <div class="box-actions"><button class="primary" id="share" data-sound="share">Copy result</button>${todayDaily&&todayDaily.puzzleId!==daily?.puzzleId?'<button class="secondary" id="today" data-sound="today">Play today’s puzzle</button>':daily?.mode==='daily'?'':'<button class="secondary" id="again" data-sound="again">Play again</button>'}</div>
   <div id="share-status" role="status"></div>
   <textarea id="share-text" aria-label="Result to copy" readonly hidden></textarea>
  </div>`;
@@ -178,6 +288,7 @@ async function submit(timed){
  if(!retry&&!timed&&Date.now()>=state.deadline)return submit(true);
  const guess=retry?state.pendingGuess:parse(state.draft);
  if(!retry&&!timed&&guess===null){$('#error').textContent='Enter a positive number or zero.';return;}
+ if(!timed)unlockSound();
  const previousBases=[...state.bases];let score;
  if(daily){
   state.pendingGuess=guess;state.pendingTimed=timed;state.phase='scoring';state.deadline=null;save();
@@ -306,6 +417,26 @@ function skyScene(elapsed,reduced=false){
  }
  return {clouds,bird};
 }
+function drawPortraitLighting(){
+ const light=currentLighting(),mask=art.portraitSkyMask;
+ if(!mask||!light.skyAlpha)return;
+ const ctx=skyContext;
+ // Reuse the offscreen canvas and composite only the upper part of the portrait.
+ ctx.clearRect(0,0,960,540);
+ ctx.fillStyle=light.sky;
+ ctx.globalAlpha=light.skyAlpha;
+ ctx.fillRect(0,0,mask.width,mask.height);
+ if(light.stars){
+  ctx.fillStyle='#fff5d5';
+  ctx.globalAlpha=light.stars*.9;
+  for(const [x,y] of STARS)ctx.fillRect(Math.round(x*752/960),Math.round(y*3.6),2,2);
+ }
+ ctx.globalAlpha=1;
+ ctx.globalCompositeOperation='destination-in';
+ ctx.drawImage(mask,0,0);
+ ctx.globalCompositeOperation='source-over';
+ c.drawImage(skyCanvas,0,0,mask.width,mask.height,0,0,mask.width,mask.height);
+}
 function drawSky(now){
  if(!art.skyClouds||!art.skyMask)return;
  const scene=skyScene(now-ambientEpoch,reducedMotion()),ctx=skyContext,light=currentLighting();
@@ -333,9 +464,9 @@ const CROWD_PROFILES=[null,
 ];
 let crowdReaction=null;
 function crowdLevel(score){return score===1000?4:score>=800?3:score>=600?2:score>=400?1:0;}
-function beginCrowdReaction(score,now){
+function beginCrowdReaction(score,now,speed=1){
  const level=crowdLevel(score);
- if(level&&!reducedMotion())crowdReaction={level,start:now+MOTION.contact};
+ if(level&&!reducedMotion())crowdReaction={level,start:now+MOTION.contact/speed};
 }
 function crowdScene(now,reduced=false){
  if(!crowdReaction||reduced)return {level:0,alpha:0,frame:0,fraction:0};
@@ -353,11 +484,21 @@ const CROWD_AREAS=[
  [[960,204],[762,207],[735,231],[960,239]],
  [[716,195],[586,195],[586,229],[716,232]]
 ];
-function drawCrowd(now){
+const PORTRAIT_CROWD_AREAS=[
+ [[0,501],[80,521],[126,543],[148,568],[0,555]],
+ [[0,584],[136,582],[169,627],[0,637]],
+ [[154,580],[210,586],[244,625],[183,626]],
+ [[502,627],[534,594],[574,590],[554,625]],
+ [[565,629],[597,591],[624,589],[600,631]],
+ [[610,630],[643,589],[752,558],[752,639]],
+ [[583,566],[722,559],[721,573],[586,588]]
+];
+function drawCrowd(now,portrait=false){
  const reaction=crowdScene(now,reducedMotion());if(!reaction.alpha||!art.crowdCheer)return;
+ const areas=portrait?PORTRAIT_CROWD_AREAS:CROWD_AREAS;
  c.save();c.globalAlpha=reaction.alpha;
- for(let area=0;area<CROWD_AREAS.length;area++){
-  const polygon=CROWD_AREAS[area],left=Math.min(...polygon.map(p=>p[0])),top=Math.min(...polygon.map(p=>p[1])),right=Math.max(...polygon.map(p=>p[0]));
+ for(let area=0;area<areas.length;area++){
+  const polygon=areas[area],left=Math.min(...polygon.map(p=>p[0])),top=Math.min(...polygon.map(p=>p[1])),right=Math.max(...polygon.map(p=>p[0]));
   c.save();c.beginPath();polygon.forEach((p,i)=>i?c.lineTo(...p):c.moveTo(...p));c.closePath();c.clip();
   for(let row=0;row<2;row++)for(let x=left,tile=0;x<right;x+=124,tile++){
    const selection=((area*7+row*5+tile*3)%17)/17;if(selection>=reaction.fraction)continue;
@@ -401,7 +542,8 @@ function draw(ball=previousPlayBall(),pose=0,movers=null,options={}){
  if(!stadium){c.fillStyle='#244a35';c.fillRect(0,0,width,height);return;}
  c.drawImage(stadium,0,0,width,height);
  const now=performance.now();
- if(!portrait){drawSky(now);drawCrowd(now);}
+ if(portrait)drawPortraitLighting();else drawSky(now);
+ drawCrowd(now,portrait);
  drawScoreboard(portrait);
  const drawPlayer=portrait?portraitPlayer:atlasPlayer,spriteTime=options.time??now;
  drawPlayer('defenderIdle',portrait?205:252,portrait?280:320,portrait?49:38,spriteTime);
@@ -589,10 +731,16 @@ function walkUp(done){
  requestAnimationFrame(frame);
 }
 function animate(score,previousBases,cleared=false){
- const reduced=reducedMotion(),startTime=performance.now();beginCrowdReaction(score,startTime);
+ const reduced=reducedMotion(),speed=reduced?1:1.5,startTime=performance.now();
+ let playedSound=false;
+ beginCrowdReaction(score,startTime,speed);
  function frame(now){
   const portrait=portraitView.matches,duration=reduced?90:playDuration(score,previousBases,portrait);
-  const elapsed=Math.min(duration,(now-startTime)*(reduced?1:1.5));
+  const elapsed=Math.min(duration,(now-startTime)*speed);
+  if(!playedSound&&(reduced||elapsed>=MOTION.contact)){
+   playedSound=true;
+   playAtBatSound(score);
+  }
   const scene=reduced?{ball:null,pose:0,runners:baseRunners(state.bases),hideBatter:true}:playScene(score,previousBases,elapsed,cleared,state.index,portrait);
   const call=$('#play-call');
   if(!call.textContent&&(elapsed>MOTION.contact+200||reduced))call.textContent=result(score).toUpperCase()+'!';
@@ -602,9 +750,14 @@ function animate(score,previousBases,cleared=false){
  requestAnimationFrame(frame);
 }
 // Keep ambient idle clips alive without repainting over play/entrance animations.
-let lastAmbientFrame=-Infinity;
+let lastAmbientFrame=-Infinity,lastDrawnLight=null;
 function ambientFrame(now){
- if(artReady&&!document.hidden&&!reducedMotion()&&!['animating','entering'].includes(state.phase)&&now-lastAmbientFrame>=1000/30){draw(previousPlayBall(),0,null,{time:now});lastAmbientFrame=now;}
+ if(artReady&&!document.hidden&&!['animating','entering'].includes(state.phase)&&now-lastAmbientFrame>=1000/30){
+  const light=currentLighting();
+  if(!reducedMotion()||light!==lastDrawnLight)draw(previousPlayBall(),0,null,{time:now});
+  lastDrawnLight=light;
+  lastAmbientFrame=now;
+ }
  requestAnimationFrame(ambientFrame);
 }
 render();requestAnimationFrame(ambientFrame);bootstrap();
